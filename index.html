@@ -1296,8 +1296,13 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.8';
+const TOOLKIT_VERSIE = '2026.10.9';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.9', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    '<strong>Spreiding rechters</strong> op het startscherm toont nu per rechter hoeveel procent die boven of onder het evenredige aandeel zit, met 0 in het midden en de marge als streepjes — net als de ranglijst bij Verdelen. De punten zie je als je een naam aanwijst',
+    '<strong>Rondleiding bij eerste gebruik:</strong> een nieuwe gebruiker wordt in een paar stappen op weg geholpen: wat de toolkit doet, databestand aanmaken en de backup-herinnering instellen. Via de Handleiding kun je hem opnieuw bekijken, bijvoorbeeld om de toolkit aan een collega te laten zien',
+    'Opgelost: na het aanmaken of openen van een databestand verscheen meteen het bestandsscherm met "Backup downloaden"; dat venster sluit nu gewoon',
+  ]},
   { versie: '2026.10.8', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     '<strong>De toolkit staat nu ook online:</strong> open hem via <strong>pepijnvaneijk-del.github.io/teamvz</strong> en je hebt altijd vanzelf de nieuwste versie, zonder te downloaden. Je gegevens blijven gewoon op je eigen computer. Stap je over, koppel je databestand dan één keer opnieuw (zie Handleiding → Aan de slag)',
   ]},
@@ -1894,36 +1899,32 @@ function homeRender() {
       </div>
     </div>` : '';
 
-  // Widget 5 — Spreiding per rechter
+  // Widget 5 — Spreiding per rechter: afwijking t.o.v. het evenredige aandeel (0 = precies
+  // evenredig), zelfde balk en oordeel als de ranglijst bij Verdelen.
   let spreidingHtml = '';
-  const sprTeam = wvActieveHandelRechters();
-  const sprTotPt = sprTeam.reduce((s,r) => s + wvPuntenVoor(r.id), 0);
-  if (sprTeam.length >= 2 && sprTotPt > 0) {
-    const maxPt = Math.max(...sprTeam.map(r => wvPuntenVoor(r.id)), 0.01);
-    // Kleur volgt de evenredige verdeling (zelfde oordeel als ranglijst en ⚠ in de keuzelijst)
-    const sprVd = new Map((wvHandelVerdeelData()?.data || []).map(d => [d.r.id, d]));
+  const sprVd = wvHandelVerdeelData();
+  if (sprVd && sprVd.totPt > 0) {
+    const schaal = wvRlSchaal(sprVd.data);
+    const mPct = Math.round(wvBelastingMarge * 100);
     spreidingHtml = '<div style="margin-top:6px;">' +
-      sprTeam.map(r => {
-        const pt = wvPuntenVoor(r.id);
-        const bPct = Math.round(pt / maxPt * 100);
-        const d = sprVd.get(r.id);
+      sprVd.data.map(d => {
         const st = wvMargeStatus(d);
-        const kleur = (wvIsAfwezig(r) || !d) ? '#d4cfc8' :
-          st === 'boven' ? wvKleurBoven : st === 'onder' ? wvKleurOnder : wvKleurRond;
-        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-family:Arial,sans-serif;font-size:11px;">' +
-          '<div style="width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#292524;" title="' + wvEsc(r.naam) + '">' + wvEsc(r.naam) + '</div>' +
-          '<div style="flex:1;background:#e2dcd5;border-radius:3px;height:10px;overflow:hidden;">' +
-          '<div style="width:' + bPct + '%;background:' + kleur + ';height:100%;border-radius:3px;"></div>' +
-          '</div>' +
-          '<div style="width:28px;text-align:right;color:#78716c;">' + pt.toFixed(1).replace('.',',') + '</div>' +
+        const kleur    = st === 'onder' ? wvKleurOnder : st === 'boven' ? wvKleurBoven : '#78716c';
+        const barKleur = st === 'onder' ? '#86efac' : st === 'boven' ? '#fca5a5' : '#d4cfc8';
+        const tip = wvEsc(d.r.naam) + ': ' + wvPtTekst(d.verschil) + ' t.o.v. het evenredige aandeel (' +
+          d.normaal.toFixed(1).replace('.',',') + ' pt; heeft er ' + d.huidig.toFixed(1).replace('.',',') + ')';
+        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-family:Arial,sans-serif;font-size:11px;" title="' + tip + '">' +
+          '<div style="width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#292524;">' + wvEsc(d.r.naam) + '</div>' +
+          '<div style="flex:1;">' + wvRlBalkHtml(d, schaal, barKleur) + '</div>' +
+          '<div style="width:36px;text-align:right;font-weight:700;color:' + kleur + ';">' + wvPctTekst(wvAfwijkingPct(d)) + '</div>' +
           '</div>';
       }).join('') +
       '<div style="display:flex;gap:10px;margin-top:6px;font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;">' +
-      '<span><span style="display:inline-block;width:8px;height:8px;background:' + wvKleurBoven + ';border-radius:2px;margin-right:3px;"></span>overbezet</span>' +
-      '<span><span style="display:inline-block;width:8px;height:8px;background:' + wvKleurOnder + ';border-radius:2px;margin-right:3px;"></span>onderbezet</span>' +
-      '<span><span style="display:inline-block;width:8px;height:8px;background:' + wvKleurRond + ';border-radius:2px;margin-right:3px;"></span>normaal</span>' +
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#fca5a5;border-radius:2px;margin-right:3px;"></span>overbezet</span>' +
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#86efac;border-radius:2px;margin-right:3px;"></span>ruimte</span>' +
+      '<span><span style="display:inline-block;width:8px;height:8px;background:#d4cfc8;border-radius:2px;margin-right:3px;"></span>normaal</span>' +
       '</div>' +
-      '<div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin-top:3px;">Breedte = punten · kleur = t.o.v. de evenredige verdeling</div>' +
+      '<div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin-top:3px;">Midden = evenredig aandeel · streepjes = marge ±' + mPct + '% · wijs een naam aan voor de punten</div>' +
       '</div>';
   } else {
     spreidingHtml = '<div style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;padding:8px 0;">Nog geen verdelingsdata</div>';
@@ -3024,7 +3025,8 @@ function uBackupDrempelsLaden() {
 }
 function uZetBackupDrempel(key, val) {
   const n = parseInt(val, 10);
-  if (!(n >= 1 && n <= 365)) { uMelding('Vul een aantal dagen tussen 1 en 365 in.', 'info'); showFileOverlay(); return; }
+  const herteken = () => _welkomStap !== null ? welkomRender() : showFileOverlay();
+  if (!(n >= 1 && n <= 365)) { uMelding('Vul een aantal dagen tussen 1 en 365 in.', 'info'); herteken(); return; }
   uBackupDrempels[key] = n;
   // Dringend kan niet vóór de eerste waarschuwing liggen; trek de ander mee.
   if (uBackupDrempels.dringend < uBackupDrempels.waarschuw) {
@@ -3033,7 +3035,7 @@ function uZetBackupDrempel(key, val) {
   lsZet('teamvz_backup_drempels', JSON.stringify(uBackupDrempels));
   uLog('instelling-gewijzigd', { instelling: 'backup-drempel-' + key });
   updateBackupDot();
-  showFileOverlay();
+  herteken();
 }
 // Is er al iets ingevoerd dat verloren kan gaan? Bepaalt o.a. of de backup-
 // herinnering en het dashboard al zin hebben bij een verse start.
@@ -7747,6 +7749,7 @@ async function fileLeesVanHandle(handle) {
 }
 
 function showFileOverlay() {
+  _welkomStap = null;
   const el  = document.getElementById('file-overlay');
   const box = document.getElementById('file-overlay-box');
   if (el)  el.style.display = 'flex';
@@ -7806,18 +7809,123 @@ function showFileOverlay() {
       <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:4px 0 10px;">Als je al eerder met de toolkit hebt gewerkt.</p>
       <button class="btn btn-ghost btn-block" style="margin-top:2px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="fileSkip()">Zonder bestand doorgaan (tijdelijk, in de browser)</button>
       <div style="margin:16px 0;border-top:1px solid #e2dcd5;"></div>
-      <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:0 0 8px;">💡 Zet het databestand in dezelfde map als toolkit.html — dan heb je alles bij elkaar en kun je de map eenvoudig meenemen of delen.</p>
+      <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:0 0 8px;">💡 Zet het databestand op een vaste plek, bijv. in je Teams- of netwerkmap, en bewaar je backups in dezelfde map.</p>
       <button class="btn btn-ghost btn-block" style="font-size:11px;text-transform:none;letter-spacing:0;" onclick="uHandleidingOpen()">📖 Gebruikshandleiding raadplegen</button>`;
   }
 }
 
 function hideFileOverlay() {
+  _welkomStap = null;
   const el = document.getElementById('file-overlay');
   if (el) el.style.display = 'none';
   // Toon de "Wat is er nieuw?"-changelog pas nadat de bestandskoppeling is afgehandeld
   // en deze overlay is gesloten — anders stapelen beide modals bij opstart. De once-only
   // guard in uVersieCheck (teamvz_versie_gezien) borgt dat de changelog maar één keer verschijnt.
   uVersieCheck();
+}
+
+// ================================================================
+// WELKOMSTRONDLEIDING (eerste gebruik)
+// ================================================================
+// Stappen in hetzelfde venster als de bestandskeuze: 0 welkom · 1 databestand ·
+// 2 backup-herinnering · 3 klaar. _welkomStap is null zolang de rondleiding dicht is.
+let _welkomStap = null;
+let _welkomBrowser = false; // gekozen voor (of aangewezen op) opslag in de browser
+
+function welkomIsEersteGebruik() {
+  try {
+    if (localStorage.getItem('teamvz_welkom_gedaan')) return false;
+    if (wvPendingHandle || wvFileHandle) return false;
+    const leeg = k => { const v = JSON.parse(localStorage.getItem(k) || '[]'); return !Array.isArray(v) || !v.length; };
+    return leeg('teamvz_personeelskaarten') && leeg('teamvz_rechters') && leeg('teamvz_zaken');
+  } catch(e) { return false; }
+}
+function welkomStart() {
+  if (!window.showOpenFilePicker) _welkomBrowser = true;
+  welkomNaar(0);
+}
+function welkomOpnieuw() {
+  uHandleidingSluit();
+  welkomStart();
+}
+function welkomNaar(stap) {
+  _welkomStap = stap;
+  const el = document.getElementById('file-overlay');
+  if (el) el.style.display = 'flex';
+  welkomRender();
+}
+function welkomZonderBestand() {
+  fileSkip(); // laadt de browseropslag en sluit het venster
+  _welkomBrowser = true;
+  welkomNaar(2);
+}
+function welkomOverslaan() {
+  lsZet('teamvz_welkom_gedaan', '1');
+  uLog('welkom-overgeslagen');
+  if (wvFileHandle || _welkomBrowser) hideFileOverlay(); else showFileOverlay();
+}
+function welkomKlaar(naarPk) {
+  lsZet('teamvz_welkom_gedaan', '1');
+  uLog('welkom-afgerond');
+  hideFileOverlay();
+  homeRender();
+  if (naarPk) showViewByName('personeelskaart');
+}
+function welkomRender() {
+  const box = document.getElementById('file-overlay-box');
+  if (!box || _welkomStap === null) return;
+  const st = _welkomStap;
+  const klein = 'font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:4px 0 10px;';
+  const bolletjes = '<div style="display:flex;justify-content:center;gap:6px;margin-bottom:16px;">' +
+    [0,1,2,3].map(i => `<span style="width:8px;height:8px;border-radius:50%;background:${i===st?'#c2410c':i<st?'#fdba74':'#e2dcd5'};"></span>`).join('') + '</div>';
+  const terug = `<button class="btn btn-ghost btn-block" style="margin-top:8px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomNaar(${st-1})">← Terug</button>`;
+  const verder = (stap, tekst='Volgende →') => `<button class="btn btn-primary btn-block" onclick="welkomNaar(${stap})">${tekst}</button>`;
+  let html = '';
+  if (st === 0) {
+    html = `<div class="file-overlay-icon">👋</div>
+      <div class="file-overlay-title">Welkom bij de Teamvoorzitter Toolkit</div>
+      <p class="file-overlay-desc">Hiermee houd je als teamvoorzitter alles op één plek bij: de werklastverdeling van zaken, de personeelskaarten van je team, de weekpost, de werkvoorraad en overleggen &amp; taken.<br><br>🔒 Alles blijft op je eigen computer; er gaat niets naar internet.<br><br>In een paar korte stappen is de toolkit klaar voor gebruik.</p>
+      ${verder(1, 'Start →')}
+      <button class="btn btn-ghost btn-block" style="margin-top:10px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomOverslaan()">Overslaan — ik heb de toolkit al eerder gebruikt</button>`;
+  } else if (st === 1) {
+    let keuze;
+    if (wvFileHandle) {
+      keuze = `<p class="file-overlay-desc" style="color:#15803d;">✓ Gekoppeld aan <strong>${wvEsc(wvFileHandle.name)}</strong>. Elke wijziging wordt daar meteen in opgeslagen.</p>${verder(2)}`;
+    } else if (_welkomBrowser) {
+      keuze = `<p class="file-overlay-desc">${window.showOpenFilePicker
+        ? 'Je gegevens worden voorlopig in de browser bewaard. Je kunt later alsnog een databestand koppelen via de knop <strong>📁</strong> rechtsboven.'
+        : 'Deze browser kan geen databestand gebruiken; je gegevens worden in de browser bewaard. Gebruik bij voorkeur <strong>Microsoft Edge</strong> of Google Chrome, dan kun je wel een databestand koppelen.'}</p>${verder(2)}`;
+    } else {
+      keuze = `<button class="btn btn-primary btn-block" onclick="fileCreateNew()">✨ Databestand aanmaken</button>
+      <p style="${klein}">Gebruik je de toolkit voor het eerst? Kies dan deze.</p>
+      <button class="btn btn-dark btn-block" onclick="fileOpenExisting()">📂 Ik heb al een databestand</button>
+      <p style="${klein}">Als je al eerder met de toolkit hebt gewerkt.</p>
+      <button class="btn btn-ghost btn-block" style="margin-top:2px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomZonderBestand()">Later (tijdelijk in de browser bewaren)</button>`;
+    }
+    html = `<div class="file-overlay-icon">📁</div>
+      <div class="file-overlay-title">Stap 1 · Waar bewaar je je gegevens?</div>
+      <p class="file-overlay-desc">De toolkit bewaart alles in één databestand. Zet dat op een vaste plek, bijvoorbeeld in je Teams- of netwerkmap.</p>
+      ${keuze}${terug}`;
+  } else if (st === 2) {
+    const inp = key => `<input type="number" min="1" max="365" value="${uBackupDrempels[key]}" style="width:54px;font-size:13px;padding:3px 5px;text-align:center;border:1px solid #d4cfc8;border-radius:4px;" onchange="uZetBackupDrempel('${key}', this.value)">`;
+    html = `<div class="file-overlay-icon">💾</div>
+      <div class="file-overlay-title">Stap 2 · Backup-herinnering</div>
+      <p class="file-overlay-desc">Een backup is een reservekopie van al je gegevens. Maak er af en toe een met de knop <strong>💾 Backup</strong> bovenaan en bewaar hem in dezelfde map als je databestand.</p>
+      <div style="font-family:Arial,sans-serif;font-size:13px;color:#57534e;line-height:2.2;margin-bottom:6px;">
+        Herinner me na ${inp('waarschuw')} dagen zonder backup,<br>dringend na ${inp('dringend')} dagen.
+      </div>
+      <p style="${klein}margin-bottom:18px;">Het bolletje bij de Backup-knop wordt dan oranje en daarna rood. Je kunt dit later aanpassen via de knop 📁 rechtsboven.</p>
+      ${verder(3)}${terug}`;
+  } else {
+    html = `<div class="file-overlay-icon">✅</div>
+      <div class="file-overlay-title">Klaar!</div>
+      <p class="file-overlay-desc">Begin met je team: voeg in de <strong>Personeelskaart</strong> je teamleden toe met hun FTE en vrijstellingen. Daarna kun je in de <strong>Werklastverdeling</strong> zaken gaan verdelen.</p>
+      <button class="btn btn-primary btn-block" onclick="welkomKlaar(true)">👥 Naar de Personeelskaart</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="welkomKlaar(false)">Naar het startscherm</button>
+      <p style="${klein}margin-top:12px;">Deze rondleiding kun je later opnieuw bekijken via de 📖 Handleiding.</p>
+      ${terug}`;
+  }
+  box.innerHTML = bolletjes + html;
 }
 
 async function fileDownloadBackup() {
@@ -7948,7 +8056,7 @@ async function fileOpenExisting() {
     wpRenderWistJeDatArchief();
     uLog('bestand-geopend');
     setFileStatus('verbonden', wvFileHandle.name);
-    if (!uLogFileHandle) { showFileOverlay(); } else { hideFileOverlay(); }
+    if (_welkomStap !== null) welkomNaar(2); else hideFileOverlay();
   } catch(e) {
     if (e.name !== 'AbortError') uMelding('Kon bestand niet openen: ' + wvEsc(e.message), 'fout');
   }
@@ -7969,7 +8077,7 @@ async function fileCreateNew() {
     wvRenderAll();
     uLog('bestand-aangemaakt');
     setFileStatus('verbonden', wvFileHandle.name);
-    if (!uLogFileHandle) { showFileOverlay(); } else { hideFileOverlay(); }
+    if (_welkomStap !== null) welkomNaar(2); else hideFileOverlay();
   } catch(e) {
     if (e.name !== 'AbortError') uMelding('Kon bestand niet aanmaken: ' + wvEsc(e.message), 'fout');
   }
@@ -8034,6 +8142,7 @@ async function initStorage() {
     setFileStatus('browser', '');
     document.getElementById('file-status').onclick = null;
     document.getElementById('file-status').title = 'Automatisch opslaan via bestand wordt niet ondersteund in deze browser.';
+    if (welkomIsEersteGebruik()) welkomStart();
     return;
   }
 
@@ -8071,6 +8180,8 @@ async function initStorage() {
     }
   } catch(e) {}
 
+  // Allereerste gebruik: rondleiding (met daarin het databestand en de backup-herinnering)
+  if (welkomIsEersteGebruik()) { welkomStart(); return; }
   // Toon overlay (met heropen-knop als er een bekend bestand is)
   showFileOverlay();
 }
@@ -10222,10 +10333,12 @@ document.addEventListener('keydown', function(e) {
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>De toolkit werkt het best in <strong>Microsoft Edge</strong> of Google Chrome. Internet Explorer werkt niet.</span></div>
           </div>
           <div class="hdl-card">
-            <h3>Eerste keer opstarten: databestand aanmaken</h3>
-            <p>Bij het eerste opstarten vraagt de toolkit of je een databestand wilt aanmaken of koppelen. Al je gegevens worden in dit JSON-bestand opgeslagen — niet in de browser.</p>
+            <h3>Eerste keer opstarten: de rondleiding</h3>
+            <p>Bij het allereerste gebruik start een korte <strong>rondleiding</strong>. Daarin maak je je databestand aan (al je gegevens worden in dit JSON-bestand opgeslagen — niet in de browser) en stel je in na hoeveel dagen de toolkit je aan een backup herinnert. Heb je al een databestand, kies dan <kbd>📂 Ik heb al een databestand</kbd>.</p>
+            <p><button class="btn btn-outline" style="font-size:12px;" onclick="welkomOpnieuw()">👋 Rondleiding opnieuw bekijken</button></p>
+            <p>Zo maak je het databestand aan:</p>
             <ol class="hdl-steps">
-              <li><p>Klik op <kbd>✨ Nieuw databestand aanmaken</kbd> in het startscherm (de bovenste, oranje knop).</p></li>
+              <li><p>Klik in stap 1 van de rondleiding op <kbd>✨ Databestand aanmaken</kbd> (later kan het ook via de knop 📁 rechtsboven).</p></li>
               <li><p>Kies een vaste map op je computer waar je het bestand wilt bewaren, bijvoorbeeld een Teams- of netwerkmap.</p></li>
               <li><p>Geef het bestand een herkenbare naam, bijvoorbeeld <strong>teamdata.json</strong>, en klik op Opslaan.</p></li>
               <li><p>De toolkit is nu klaar voor gebruik. In de navigatiebalk zie je rechts het bestandsknopje staan.</p></li>
@@ -10252,7 +10365,7 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>Het dashboard op het startscherm</h3>
-            <p>Het startscherm vat de belangrijkste informatie samen in widgets: de laatste weekpost, de werklastverdeling, teamcapaciteit, intensiteit, de spreiding per rechter, de aanvoer per week, <strong>🏖 Afwezigheden</strong> (wie is nu afwezig en wie de komende vier weken) en <strong>☑️ Taken</strong> (je open taken, die je daar direct kunt afvinken). Bovenaan staat het vak <strong>Snel noteren</strong> (zie Overleggen &amp; Taken). De meeste widgets zijn klikbaar en brengen je direct naar het juiste onderdeel. Met <kbd>🖨 Afdrukken</kbd> rechtsboven druk je het dashboard af of bewaar je het als PDF.</p>
+            <p>Het startscherm vat de belangrijkste informatie samen in widgets: de laatste weekpost, de werklastverdeling, teamcapaciteit, intensiteit, de spreiding per rechter (hoeveel procent iemand boven of onder het evenredige aandeel zit: het midden is precies evenredig, de streepjes zijn je marge; wijs een naam aan voor de punten), de aanvoer per week, <strong>🏖 Afwezigheden</strong> (wie is nu afwezig en wie de komende vier weken) en <strong>☑️ Taken</strong> (je open taken, die je daar direct kunt afvinken). Bovenaan staat het vak <strong>Snel noteren</strong> (zie Overleggen &amp; Taken). De meeste widgets zijn klikbaar en brengen je direct naar het juiste onderdeel. Met <kbd>🖨 Afdrukken</kbd> rechtsboven druk je het dashboard af of bewaar je het als PDF.</p>
           </div>
         </section>
 
