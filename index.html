@@ -1298,8 +1298,15 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.15';
+const TOOLKIT_VERSIE = '2026.10.16';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.16', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    'Sneller: het startscherm en het verdelen rekenen de evenredige verdeling nog maar één keer per scherm uit, en het typen van een naam bij een vrijstelling of neventaak slaat pas op als je het veld verlaat',
+    'Opgelost: de ▲▼-knoppen bij overlegtypen waren na verschuiven soms op de verkeerde kaart uitgeschakeld',
+    'Opgelost: na het verwijderen van een overlegtype verdwenen de bijbehorende taken uit beeld; ze blijven nu staan als losse taak',
+    'Opgelost: na het registreren van een meervoudige kamer zonder lid stond er "(onbekend)" in de bevestiging',
+    'Opgelost: de kop bovenaan sprong na sommige wijzigingen naar die van het startscherm',
+  ]},
   { versie: '2026.10.15', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     '<strong>Neventaken met een FTE-waarde verlagen nu echt de effectieve FTE</strong>, net als vrijstellingen — op de personeelskaart én in de werklastverdeling. Let op: bij teamleden met zo\'n neventaak verandert daardoor hun evenredige aandeel',
     'Pas je de FTE van een vrijstellingscategorie aan, dan rekenen alle teamleden met die vrijstelling direct met de nieuwe waarde',
@@ -1702,7 +1709,8 @@ function homePrint() {
   uLog('home-dashboard-afgedrukt');
 }
 
-function homeRender() {
+function homeRender() { wvVerdeelCacheTijdens(_homeRender); }
+function _homeRender() {
   const el = document.getElementById('home-dashboard');
   if (!el) return;
   uModulesToepassen();
@@ -3027,30 +3035,6 @@ let uLogFileHandle  = null;
 let _uLogPendingHandle = null;
 let _uLogWriteTimer = null;
 
-async function uLogBestandAanmaken() {
-  if (uLogFileHandle || !window.showSaveFilePicker) return;
-  try {
-    const _logOpts = {
-      suggestedName: 'teamvz-gebruikslog.json',
-      types: [{ description: 'Gebruikslog', accept: { 'application/json': ['.json'] } }]
-    };
-    const _dataHandle = wvFileHandle || await idbGet('dataHandle');
-    if (_dataHandle) _logOpts.startIn = _dataHandle;
-    uLogFileHandle = await window.showSaveFilePicker(_logOpts);
-    await idbSet('logHandle', uLogFileHandle);
-    _uLogPendingHandle = null;
-    clearTimeout(_uLogWriteTimer);
-    try {
-      const w = await uLogFileHandle.createWritable();
-      await w.write(JSON.stringify(uGebruiksLog, null, 2));
-      await w.close();
-    } catch(e) {}
-    hideFileOverlay();
-  } catch(e) {
-    if (e.name !== 'AbortError') console.warn('Logbestand aanmaken mislukt:', e.message);
-  }
-}
-
 function uLogSchrijfNaarBestand() {
   if (!uLogFileHandle || _sessionGeblokkeerd) return;
   clearTimeout(_uLogWriteTimer);
@@ -3074,11 +3058,6 @@ function uLogLaden() {
   try { const v = localStorage.getItem(U_KEY); if (v) uGebruiksLog = JSON.parse(v); } catch(e) {}
 }
 
-function uLogDownload() {
-  uLog('gebruikslog-gedownload', { aantalEntries: uGebruiksLog.length });
-  const datum = uDatumISO();
-  uDownloadBlob(JSON.stringify(uGebruiksLog, null, 2), `teamvz-gebruikslog-${datum}.json`, 'application/json');
-}
 function wvGewicht(z) { return parseFloat(wvGewichten[z]) || 1; }
 
 function wvHeeftActievePeriode(r) {
@@ -3276,6 +3255,7 @@ function wvAantalZakenVoor(rid) {
 function wvRechterNaam(rid) {
   if (rid===WV_PLVRIO.id) return WV_PLVRIO.naam;
   if (rid===WV_NN.id)     return WV_NN.naam;
+  if (!rid) return ''; // lege plek (bijv. MK zonder lid 1) is geen onbekende rechter
   const r=wvRechters.find(r=>r.id===rid); return r?r.naam:'(onbekend)';
 }
 
@@ -3535,7 +3515,8 @@ function wvAdviesRegel(r, rolLabel) {
   return `<div style="font-family:Arial,sans-serif;font-size:11px;color:#78716c;margin-top:4px;">💡 Advies${rolLabel ? ' ' + rolLabel : ''}: <strong>${wvEsc(r.naam)}</strong> — ${uitleg}</div>`;
 }
 
-function wvRenderZaakSelectors() {
+function wvRenderZaakSelectors() { wvVerdeelCacheTijdens(_wvRenderZaakSelectors); }
+function _wvRenderZaakSelectors() {
   const el=document.getElementById('wv-rechter-selectors'); if(!el) return;
   if (!wvRechters.length) { el.innerHTML='<div class="waarschuwing">Voeg eerst rechters toe via het tabblad Team.</div>'; return; }
   const enterKey=`onkeydown="if(event.key==='Enter')wvAddZaak()"`;
@@ -4000,7 +3981,7 @@ function _wvAddZaakDoen(kenmerk) {
   }
   wvZaken.unshift(zaak); wvOpslaan();
   uLog('zaak-geregistreerd', { type: wvFormType, zwaarte: wvFormZwaarte });
-  const _naam = zaak.type==='E' ? wvRechterNaam(zaak.rechter_id) : `${wvRechterNaam(zaak.vz_id)} (VZ), ${wvRechterNaam(zaak.l1_id)}${zaak.l2_id?', '+wvRechterNaam(zaak.l2_id):''}`;
+  const _naam = zaak.type==='E' ? wvRechterNaam(zaak.rechter_id) : [wvRechterNaam(zaak.vz_id) + ' (VZ)', wvRechterNaam(zaak.l1_id), wvRechterNaam(zaak.l2_id)].filter(Boolean).join(', ');
   document.getElementById('wv-z-kenmerk').value='';
   const notEl = document.getElementById('wv-z-notitie'); if (notEl) notEl.value = '';
   wvSetZwaarte('B');
@@ -5429,7 +5410,7 @@ function wvRefPuntenSindsTot(van, tot, teamRH) {
   for (const z of wvZaken) {
     if (z.afgehandeld || zaakIsKanton(z)) continue;
     if (van && z.datum && z.datum < van) continue;
-    if (tot && z.datum && z.datum >= tot) continue;
+    if (tot && (!z.datum || z.datum >= tot)) continue; // zonder datum: alleen in de periode ná 'tot' (niet dubbel)
     for (const r of teamRH) p += zaakBijdrageVoor(z, r.id);
   }
   return p;
@@ -5439,7 +5420,22 @@ function wvRefPuntenSindsTot(van, tot, teamRH) {
 // puntental, het 'normale' (eerlijke) aandeel en het verschil. Wordt gebruikt door
 // de ranglijst én de ⚠-markering in de rechterkeuzelijst, zodat beide altijd
 // hetzelfde oordeel geven. Geeft null bij te weinig gegevens.
+// Tijdens één render (startscherm, rechterkeuze) wordt de verdeling vaak meerdere keren
+// opgevraagd; binnen wvVerdeelCacheTijdens wordt ze één keer berekend. Buiten zo'n render
+// altijd vers, zodat een wijziging nooit een verouderd resultaat oplevert.
+let _vdCache, _vdCacheDiepte = 0;
+function wvVerdeelCacheTijdens(fn) {
+  _vdCacheDiepte++;
+  try { return fn(); }
+  finally { if (--_vdCacheDiepte === 0) _vdCache = undefined; }
+}
 function wvHandelVerdeelData() {
+  if (_vdCacheDiepte && _vdCache !== undefined) return _vdCache;
+  const vd = _wvHandelVerdeelDataBereken();
+  if (_vdCacheDiepte) _vdCache = vd;
+  return vd;
+}
+function _wvHandelVerdeelDataBereken() {
   const horizon = wvVerdeelHorizon();
   const teamRH = wvVerdeelTeam(horizon);
   if (teamRH.length < 2) return null;
@@ -5992,10 +5988,13 @@ function wvInjectBelastingKleuren() {
 function wvRenderAll() {
   wvInjectBelastingKleuren();
   wvAutoSnapshot();
-  wvRenderRechters(); wvRenderVerdeelStatus(); wvRenderZaakSelectors(); wvRenderZakenLijst();
-  wvRenderInzicht(); wvRenderInstellingen();
-  homeRender();
-  updateAppHeaderRight('home');
+  wvVerdeelCacheTijdens(() => {
+    wvRenderRechters(); wvRenderVerdeelStatus(); wvRenderZaakSelectors(); wvRenderZakenLijst();
+    wvRenderInzicht(); wvRenderInstellingen();
+    homeRender();
+  });
+  // Kop bijwerken voor het scherm dat open staat (niet altijd het startscherm)
+  updateAppHeaderRight(document.querySelector('.view.active')?.id?.replace('view-', '') || 'home');
 }
 
 // ================================================================
@@ -6601,7 +6600,7 @@ function pkEditRij(k) {
     const dv = ee==='uren' ? (v.uren!=null?v.uren:Math.round((parseFloat(v.fte)||0)*36*10)/10) : v.fte;
     return `<div class="vrijst-rij">
       <div class="vr-lbl"><label>Omschrijving</label>
-        <input type="text" value="${wvEsc(v.label)}" placeholder="bijv. OR-lid" oninput="pkUpdateVrijstLabel('${k.id}',${i},this.value)"></div>
+        <input type="text" value="${wvEsc(v.label)}" placeholder="bijv. OR-lid" onchange="pkUpdateVrijstLabel('${k.id}',${i},this.value)"></div>
       <div class="vr-fte"><label>Omvang</label>
         <div style="display:flex;gap:4px;align-items:center;">
           <input type="number" value="${dv}" min="0" max="${ee==='uren'?40:2}" step="${ee==='uren'?0.5:0.05}" style="flex:1;min-width:50px;" oninput="pkUpdateVrijstWaarde('${k.id}',${i},this.value)">
@@ -6632,7 +6631,7 @@ function pkEditRij(k) {
     }
     return `<div class="vrijst-rij">
       <div class="vr-lbl"><label>Omschrijving</label>
-        <input type="text" value="${wvEsc(n.label)}" placeholder="bijv. werkgroep" oninput="pkUpdateNevenLabel('${k.id}',${i},this.value)"></div>
+        <input type="text" value="${wvEsc(n.label)}" placeholder="bijv. werkgroep" onchange="pkUpdateNevenLabel('${k.id}',${i},this.value)"></div>
       <div class="vr-fte"><label style="white-space:nowrap;">Tijdsbeslag <span style="font-weight:normal;color:#a8a29e;">(FTE, opt.)</span></label>
         <input type="number" value="${n.fte||''}" placeholder="0" min="0" max="1" step="0.05" oninput="pkUpdateNevenFTE('${k.id}',${i},this.value)"></div>
       <div><label>&nbsp;</label><button class="btn btn-danger" onclick="pkVerwijderNeven('${k.id}',${i})">×</button></div>
@@ -6950,10 +6949,6 @@ function pkVerwijderVrijst(kid,idx) {
 function pkUpdateVrijstLabel(kid,idx,val) {
   const k = pkKaarten.find(k=>k.id===kid);
   if (k?.vrijstellingen[idx]!==undefined) { k.vrijstellingen[idx].label=val; pkOpslaan(); }
-}
-function pkUpdateVrijstFTE(kid,idx,val) {
-  const k = pkKaarten.find(k=>k.id===kid);
-  if (k?.vrijstellingen[idx]!==undefined) { k.vrijstellingen[idx].fte=Math.max(0,parseFloat(val)||0); pkOpslaan(); pkRecalc(); }
 }
 function pkUpdateVrijstWaarde(kid,idx,val) {
   const k = pkKaarten.find(k=>k.id===kid);
@@ -7489,7 +7484,6 @@ window.addEventListener('storage', e => {
 window.addEventListener('pagehide', () => _sessionStuur('weg'));
 _sessionStuur('ping');
 let wvBulkGevonden    = [];
-let wvArchiefOpen     = false;
 let wvZaakFilter      = '';
 let wvOvExpandedId    = null;
 let wvVerdelingActief = false;
@@ -9530,7 +9524,8 @@ function ovRenderOverleggen() {
 
 function ovKaartHtml(type) {
   const id        = type.id;
-  const idx       = ovOverlegtypen.findIndex(t => t.id === id);
+  // Positie in de getoonde (op volgorde gesorteerde) lijst, niet in de opslag-array
+  const idx       = [...ovOverlegtypen].sort((a, b) => a.volgorde - b.volgorde).findIndex(t => t.id === id);
   const isEerste  = idx === 0;
   const isLaatste = idx === ovOverlegtypen.length - 1;
   const isOpen    = ovOpenAccordion.has(id);
@@ -10225,6 +10220,7 @@ function ovVerwijderType(id) {
 }
 function _ovVerwijderTypeDoen(id) {
   ovOverlegtypen = ovOverlegtypen.filter(t => t.id !== id);
+  ovTaken.forEach(t => { if (t.overleg_id === id) t.overleg_id = null; }); // taken blijven, als losse taak
   ovOverlegtypen.sort((a, b) => a.volgorde - b.volgorde).forEach((t, i) => { t.volgorde = i; });
   if (ovTaakFilter === id) ovTaakFilter = 'alles';
   ovOpenAccordion.delete(id);
