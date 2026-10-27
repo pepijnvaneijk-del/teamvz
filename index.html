@@ -1298,8 +1298,21 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.14';
+const TOOLKIT_VERSIE = '2026.10.15';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.15', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    '<strong>Neventaken met een FTE-waarde verlagen nu echt de effectieve FTE</strong>, net als vrijstellingen — op de personeelskaart én in de werklastverdeling. Let op: bij teamleden met zo\'n neventaak verandert daardoor hun evenredige aandeel',
+    'Pas je de FTE van een vrijstellingscategorie aan, dan rekenen alle teamleden met die vrijstelling direct met de nieuwe waarde',
+    'Opgelost: stond een zaak twee keer in een import-CSV, dan werd hij dubbel geïmporteerd (en telde dubbel mee). De voorvertoning toont nu "dubbel in lijst"',
+    'Opgelost: na het vinkje "afwezig" aan- en weer uitzetten telden latere afwezigheidsperiodes van die rechter niet meer mee in de verdeling',
+    'Kanton: een rechter die later is aangesteld krijgt, net als bij handel, alleen een aandeel van wat er sindsdien is verdeeld',
+    'Opgelost: een verdeling uit week 52 die je in januari afrondt, kwam in het verkeerde jaar terecht; ook blijft een open verdeling nu staan als je de toolkit sluit en weer opent',
+    'Opgelost: bij een taak (en een bespreekpunt bij een rechter) kon je achteraf geen deadline, label of datum meer instellen — het bewerkvak sloot zodra je naar dat veld ging',
+    'Opgelost: de melding bij <strong>Intensiteit</strong> op het startscherm vergeleek met de snapshot van deze week en verscheen daardoor nooit; hij vergelijkt nu met de vorige week',
+    'Het <strong>Teamoverzicht</strong> toont nu één norm (dezelfde als de ranglijst), houdt rekening met afwezigheid en laat de puntgewichten zien die je hebt ingesteld',
+    'Jaarrapport en "Uit werkvoorraad" pakken rond de jaarwisseling niet meer een week uit het verkeerde jaar',
+    'Namen en notities met tekens als &lt; of &amp; worden nu overal goed afgedrukt en geëxporteerd; een overlegtype met een apostrof is weer te hernoemen',
+  ]},
   { versie: '2026.10.14', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     'Opgelost: wie zonder databestand (in de browser) werkt, kon bij het opnieuw opstarten het <strong>archief van de weekmails</strong> en de wist-je-dat-lijst kwijtraken. Bij een traag databestand (bijv. in Teams) kon zelfs een lege stand in het bestand terechtkomen. De toolkit slaat nu pas iets op als je gegevens echt geladen zijn',
     'Opgelost: als een databestand niet gelezen kon worden, bleef de toolkit eraan gekoppeld en kon de volgende wijziging het bestand overschrijven. Nu blijft je vorige bestand gekoppeld en wordt het onleesbare bestand niet aangeraakt',
@@ -1777,7 +1790,7 @@ function homeRender() {
   pkTeam.forEach(k => {
     totFte  += parseFloat(k.fte)||0;
     totEff  += pkEffFTE(k);
-    totOverhead += (k.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0),0);
+    totOverhead += pkAftrekken(k).reduce((s,a)=>s+a.fte,0);
   });
   const ovPct = totFte>0 ? Math.round(totOverhead/totFte*100) : 0;
   const capHoofd = pkTeam.length ? `${totEff.toFixed(2).replace('.',',')} eff. FTE` : '—';
@@ -1807,8 +1820,11 @@ function homeRender() {
     ? `pt per eff. FTE${teamRH.length?` · ${teamRH.length} rechter${teamRH.length===1?'':'s'}`:''}`
     : 'Nog geen zaken of rechters';
   let intAlert='', intAlertOk=false;
-  if (wvSnapshots.length>=2&&intensiteit!==null) {
-    const prev=wvSnapshots[0];
+  // Vergelijk met de laatste snapshot van een eerdere week: die van deze week loopt (via
+  // wvAutoSnapshot) mee met de actuele stand en geeft dus altijd een verschil van 0.
+  const _nu = new Date(), _nuWk = wpIsoWeek(_nu), _nuJr = wpIsoJaar(_nu);
+  const prev = wvSnapshots.find(sn => !(sn.week === _nuWk && (sn.jaar == null ? (sn.datum||'').slice(0,4) === String(_nuJr) : sn.jaar === _nuJr)));
+  if (prev&&intensiteit!==null) {
     // Nieuwere snapshots bewaren de norm van de ranglijst; bij oudere de benadering punten/eFTE
     const prevInt=prev.norm!=null?prev.norm:(prev.totaalEffFTE>0?prev.totaalPunten/prev.totaalEffFTE:null);
     if (prevInt!==null) {
@@ -2924,7 +2940,8 @@ function uOpenPrintVenster(html) {
 // Excel-export: één tabel als HTML-sheet (Excel opent dit formaat native).
 function uHtmlSheet(titel, header, rijen) {
   const th = header.map(h=>`<th style="background:#292524;color:#fdf8f0;padding:6px 10px;font-family:Arial;font-size:11pt;">${h}</th>`).join('');
-  const trs = rijen.map(r=>`<tr>${r.map(c=>`<td style="padding:5px 10px;font-family:Arial;font-size:10pt;">${c}</td>`).join('')}</tr>`).join('');
+  // Celinhoud is altijd platte tekst (namen, notities): hier escapen, dan kan geen export het vergeten
+  const trs = rijen.map(r=>`<tr>${r.map(c=>`<td style="padding:5px 10px;font-family:Arial;font-size:10pt;">${wvEsc(c == null ? '' : String(c))}</td>`).join('')}</tr>`).join('');
   return `<h3 style="font-family:Arial;color:#292524;">${titel}</h3><table border="1" style="border-collapse:collapse;"><tr>${th}</tr>${trs}</table><br/>`;
 }
 // localStorage-write die niet crasht als de opslag vol is (QuotaExceededError):
@@ -3385,7 +3402,9 @@ function wvKantonCatRechterToggle(rid, cid, aan) {
 function wvToggleAfwezig(rid,val) {
   const r=wvRechters.find(r=>r.id===rid);
   if (!r) return;
-  r.afwezigHandmatig = val;
+  // Uitvinken is alleen een overschrijving ("toch aanwezig") als er nú een periode loopt;
+  // anders terug naar automatisch, zodat latere afwezigheidsperiodes gewoon meetellen.
+  r.afwezigHandmatig = val ? true : (wvHeeftActievePeriode(r) ? false : null);
   uLog('rechter-afwezig-gewijzigd', { afwezig: val });
   wvOpslaan(); wvRenderRechters(); wvRenderOverzicht(); wvRenderVerdeelRanglijst(); updateAppHeaderRight('werklastverdeling'); homeRenderAandacht();
 }
@@ -3644,7 +3663,7 @@ function _wvAddKantonZaakDoen(kenmerk) {
   };
   if (wvVerdelingActief && wvVerdelingWeek != null) {
     zaak.verdeelweek = wvVerdelingWeek;
-    zaak.verdeeljaar = wpIsoJaar(new Date());
+    zaak.verdeeljaar = wvVerdelingJaar || wpIsoJaar(new Date());
   }
   wvZaken.unshift(zaak);
   wvOpslaan();
@@ -3977,7 +3996,7 @@ function _wvAddZaakDoen(kenmerk) {
   // (niet afhankelijk van in welke ISO-kalenderweek de zaakdatum valt).
   if (wvVerdelingActief && wvVerdelingWeek != null) {
     zaak.verdeelweek = wvVerdelingWeek;
-    zaak.verdeeljaar = wpIsoJaar(new Date());
+    zaak.verdeeljaar = wvVerdelingJaar || wpIsoJaar(new Date());
   }
   wvZaken.unshift(zaak); wvOpslaan();
   uLog('zaak-geregistreerd', { type: wvFormType, zwaarte: wvFormZwaarte });
@@ -4211,15 +4230,18 @@ function wvRenderOverzicht() {
   wvVulJaarrapportJaren();
   const teamR=wvRechters.filter(r=>wvIsRechterRol(r)&&wvIsHandelRechter(r));
   const totPunten=wvTotaalHandelPunten();
-  const totEFTE=teamR.reduce((s,r)=>s+wvEffFTE(r),0);
-  // Kleuren en norm uit de evenredige verdeling, zodat dit overzicht hetzelfde zegt als de ranglijst
+  // Kleuren, norm én eFTE uit de evenredige verdeling (gewogen naar beschikbaarheid), zodat
+  // dit overzicht hetzelfde zegt als de ranglijst
   const ovVd=wvHandelVerdeelData();
   const ovMap=new Map((ovVd?.data||[]).map(d=>[d.r.id,d]));
+  const eFteVan=r=>ovMap.has(r.id)?ovMap.get(r.id).eFte:wvEffFTE(r);
+  const totEFTE=teamR.reduce((s,r)=>s+eFteVan(r),0);
+  const g=v=>String(parseFloat(v)||0).replace('.',',');
   const gemInt=ovVd&&ovVd.totEFte>0?(ovVd.totPt/ovVd.totEFte).toFixed(2).replace('.',','):'—';
   totEl.innerHTML=`<div class="card-title">Teamoverzicht</div>
     <div class="totalen-blok">
       <div class="totaal-item"><div class="totaal-item-lbl">Zaken</div><div class="totaal-item-val">${wvZaken.filter(z=>!z.afgehandeld).length}</div><div class="totaal-item-sub">actief${wvZaken.some(z=>z.afgehandeld)?` · ${wvZaken.filter(z=>z.afgehandeld).length} gearc.`:''}</div></div>
-      <div class="totaal-item"><div class="totaal-item-lbl">Totaal punten</div><div class="totaal-item-val">${totPunten.toFixed(1).replace('.',',')}</div><div class="totaal-item-sub">B=1 · C=1,5 · D=2</div></div>
+      <div class="totaal-item"><div class="totaal-item-lbl">Totaal punten</div><div class="totaal-item-val">${totPunten.toFixed(1).replace('.',',')}</div><div class="totaal-item-sub">B=${g(wvGewichten.B)} · C=${g(wvGewichten.C)} · D=${g(wvGewichten.D)}</div></div>
       <div class="totaal-item"><div class="totaal-item-lbl">Eff. FTE team</div><div class="totaal-item-val">${totEFTE.toFixed(2).replace('.',',')}</div><div class="totaal-item-sub">beschikbare capaciteit</div></div>
       <div class="totaal-item"><div class="totaal-item-lbl">Norm</div><div class="totaal-item-val">${gemInt}</div><div class="totaal-item-sub">pt per eFTE (zoals in de ranglijst)</div></div>
     </div>`;
@@ -4227,11 +4249,11 @@ function wvRenderOverzicht() {
   const tabEl=document.getElementById('wv-overzicht-tabel'); if(!tabEl) return;
   if (!teamR.length) { tabEl.innerHTML='<div class="leeg">Voeg rechters toe om de verdeling te zien.</div>'; return; }
 
-  const intensiteiten=teamR.filter(r=>wvEffFTE(r)>0).map(r=>wvPuntenVoor(r.id)/wvEffFTE(r));
+  const intensiteiten=teamR.filter(r=>eFteVan(r)>0).map(r=>wvPuntenVoor(r.id)/eFteVan(r));
   const maxInt=intensiteiten.length?Math.max(...intensiteiten,0.001):1;
 
   const rijen=teamR.map(r=>{
-    const efte=wvEffFTE(r), punten=wvPuntenVoor(r.id), tl=wvZakentellingVoor(r.id);
+    const efte=eFteVan(r), punten=wvPuntenVoor(r.id), tl=wvZakentellingVoor(r.id);
     const intens=efte>0?punten/efte:null;
     let balkK,balkB;
     if (efte===0) { balkK='balk-grijs'; balkB=0; }
@@ -4241,7 +4263,7 @@ function wvRenderOverzicht() {
     const chevron = `<span style="font-size:10px;color:#a8a29e;margin-left:4px;">${expanded?'▾':'▸'}</span>`;
     let detailRij = '';
     if (expanded) {
-      const actief = wvZaken.filter(z => !z.afgehandeld && (z.rechter_id===r.id||z.vz_id===r.id||z.l1_id===r.id||z.l2_id===r.id));
+      const actief = wvZaken.filter(z => !z.afgehandeld && !zaakIsKanton(z) && (z.rechter_id===r.id||z.vz_id===r.id||z.l1_id===r.id||z.l2_id===r.id));
       const detailHtml = actief.length
         ? `<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;">
             <thead><tr>
@@ -4275,7 +4297,7 @@ function wvRenderOverzicht() {
   tabEl.innerHTML=`<div class="ov-tabel-wrap"><table class="ov-tabel">
     <thead><tr><th>Naam</th><th>FTE / vrijstellingen</th><th style="text-align:center;">Eff. FTE</th><th title="Aantal zaken per zwaarte" style="text-align:center;white-space:nowrap;">B / C / D</th><th style="text-align:center;">Punten</th><th title="Punten per effectieve FTE" style="text-align:center;">Pt/eFTE</th><th>Belasting</th></tr></thead>
     <tbody>${rijen}</tbody>
-    <tfoot><tr><td>Totaal</td><td></td><td style="text-align:center;">${totEFTE.toFixed(2).replace('.',',')}</td><td style="text-align:center;white-space:nowrap;">${totBCD.B}&thinsp;/&thinsp;${totBCD.C}&thinsp;/&thinsp;${totBCD.D}</td><td style="text-align:center;">${totPunten.toFixed(1).replace('.',',')}</td><td style="text-align:center;">${totEFTE>0?(totPunten/totEFTE).toFixed(2).replace('.',','):'—'}</td><td></td></tr></tfoot>
+    <tfoot><tr><td>Totaal</td><td></td><td style="text-align:center;">${totEFTE.toFixed(2).replace('.',',')}</td><td style="text-align:center;white-space:nowrap;">${totBCD.B}&thinsp;/&thinsp;${totBCD.C}&thinsp;/&thinsp;${totBCD.D}</td><td style="text-align:center;">${totPunten.toFixed(1).replace('.',',')}</td><td style="text-align:center;" title="Norm: zoals in de ranglijst">${gemInt}</td><td></td></tr></tfoot>
   </table></div>
   <p style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;margin-top:10px;">
     Balk: <span style="color:${wvKleurOnder};font-weight:600;">■</span> = onder gemiddelde &nbsp;·&nbsp;
@@ -4446,8 +4468,7 @@ function wvJaarrapport() {
   const nuJaar = new Date().getFullYear();
   const inMap  = wvInstroomPerMaand(jaar);
   const uitMap = wvUitstroomPerMaand(jaar);
-  const tmMaand = jaar === nuJaar ? new Date().getMonth() + 1
-    : Math.max(12, ...[...inMap.keys(), ...uitMap.keys()].map(k => Number(k.slice(5, 7))));
+  const tmMaand = jaar === nuJaar ? new Date().getMonth() + 1 : 12;
   const maanden = [];
   for (let m = 1; m <= Math.min(12, tmMaand); m++) {
     const key = `${jaar}-${String(m).padStart(2, '0')}`;
@@ -4468,14 +4489,16 @@ function wvJaarrapport() {
 
   // Schrijfkast-verloop uit de weekpost
   const sk = wpWeekMailArchief
-    .filter(m => !m.handmatig && (m.datum || '').slice(0, 4) === String(jaar) && m.schrijfkast)
+    // Jaar van het weeknummer (wpArchiefJaar), niet van de verzenddatum: week 1 die op
+    // 31 december is verstuurd hoort bij het nieuwe jaar
+    .filter(m => !m.handmatig && m.schrijfkast && wpArchiefJaar(m) === jaar)
+    .sort((a, b) => wpArchiefSleutel(a) - wpArchiefSleutel(b))
     .map(m => ({ week: Number(m.week), totaal: Number(m.schrijfkast.totaal) || 0, datum: m.datum }))
-    .filter(m => Number.isFinite(m.week))
-    .sort((a, b) => a.week - b.week);
+    .filter(m => Number.isFinite(m.week));
   const skGem = sk.length ? sk.reduce((a, m) => a + m.totaal, 0) / sk.length : null;
 
   // Team: begin- en eindstand uit de snapshots van dit jaar
-  const snaps = wvSnapshots.filter(sn => (sn.datum || '').slice(0, 4) === String(jaar))
+  const snaps = wvSnapshots.filter(sn => (sn.jaar != null ? Number(sn.jaar) : Number((sn.datum || '').slice(0, 4))) === jaar)
     .sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
   const snapEerste = snaps[0], snapLaatste = snaps[snaps.length - 1];
 
@@ -4817,6 +4840,8 @@ function wvUpdateCatWaarde(cid, val) {
     c.fte = Math.max(0.01, v);
     c.uren = null;
   }
+  // Teamleden met deze vrijstelling rekenen direct met de nieuwe waarde
+  if (pkSyncAlleNaarWV().length) wvRenderAll();
   wvOpslaan();
 }
 
@@ -5088,7 +5113,7 @@ function wvExporteerBundel(key) {
     ];
   });
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body>
-    ${uHtmlSheet(`Afgesloten zaken — ${wvEsc(wvBundelLabel(key))}`, header, rijen.map(r => r.map(c => wvEsc(String(c)))))}
+    ${uHtmlSheet(`Afgesloten zaken — ${wvEsc(wvBundelLabel(key))}`, header, rijen)}
   </body></html>`;
   const naam = key === 'onbekend' ? 'uitstroom-eerder.xls' : `uitstroom-${key.split('|')[0]}.xls`;
   uDownloadBlob(html, naam, 'application/vnd.ms-excel;charset=utf-8');
@@ -5155,19 +5180,21 @@ function pkHerstelUitPrullenbak(id) {
 function wvVerdelingLaden() {
   try {
     const v = localStorage.getItem('teamvz_verdeling');
-    if (v) { const d=JSON.parse(v); wvVerdelingActief=!!d.actief; wvVerdelingWeek=d.week||null; }
+    if (v) { const d=JSON.parse(v); wvVerdelingActief=!!d.actief; wvVerdelingWeek=d.week||null; wvVerdelingJaar=d.jaar||null; }
   } catch(e) {}
 }
 
 function wvVerdelingOpslaan() {
-  lsZet('teamvz_verdeling', JSON.stringify({actief:wvVerdelingActief,week:wvVerdelingWeek}));
+  lsZet('teamvz_verdeling', JSON.stringify({actief:wvVerdelingActief,week:wvVerdelingWeek,jaar:wvVerdelingJaar}));
 }
 
 // Een gestarte verdeling die niet is afgerond terwijl de kalenderweek al verder is.
 // Bewust géén melding als er niets gestart is — soms valt er niets te verdelen.
 function wvOpenVerdeelweek() {
   if (!wvVerdelingActief || wvVerdelingWeek == null) return null;
-  return wpIsoWeek(new Date()) !== wvVerdelingWeek ? wvVerdelingWeek : null;
+  const nu = new Date();
+  const anders = wpIsoWeek(nu) !== wvVerdelingWeek || (wvVerdelingJaar != null && wpIsoJaar(nu) !== wvVerdelingJaar);
+  return anders ? wvVerdelingWeek : null;
 }
 
 // Datum van de laatste CSV-batch-afsluiting; null als er nog nooit een batch was.
@@ -5220,6 +5247,7 @@ function wvRenderInzichtMeldingen() {
 function wvVerdelingStarten(logActie = 'verdeling-gestart') {
   wvVerdelingActief = true;
   wvVerdelingWeek   = wpIsoWeek(new Date());
+  wvVerdelingJaar   = wpIsoJaar(new Date());
   wvVerdelingOpslaan();
   uLog(logActie, { week: wvVerdelingWeek });
   wvRenderVerdeelStatus();
@@ -5249,7 +5277,7 @@ function wvZakenInVerdeling(week, jaar) {
 
 function wvVerdelingAfronden() {
   const week = wvVerdelingWeek || wpIsoWeek(new Date());
-  const jaar = wpIsoJaar(new Date());
+  const jaar = wvVerdelingJaar || wpIsoJaar(new Date());
   const nu   = new Date();
   const dezeWeek = wvZakenInVerdeling(week, jaar);
   const bestaand = wvVerdeelweken.find(w=>w.week===week&&w.jaar===jaar);
@@ -5267,6 +5295,7 @@ function wvVerdelingAfronden() {
   });
   wvVerdelingActief = false;
   wvVerdelingWeek   = null;
+  wvVerdelingJaar   = null;
   wvVerdelingOpslaan();
   uLog('week-afgerond', { leeg: !dezeWeek.length });
   wvOpslaan();
@@ -5350,7 +5379,7 @@ function wvRenderVerdeelStatus() {
   const el    = document.getElementById('wv-verdeling-status'); if (!el) return;
   const formEl = document.getElementById('wv-verdeling-formulier');
   const week  = wvVerdelingActief ? wvVerdelingWeek : wpIsoWeek(new Date());
-  const jaar  = wpIsoJaar(new Date());
+  const jaar  = (wvVerdelingActief && wvVerdelingJaar) || wpIsoJaar(new Date());
 
   if (wvVerdelingActief) {
     const dezeWeek = wvZakenInVerdeling(week, jaar);
@@ -5492,10 +5521,29 @@ function wvKantonVerdeelData(catId = null) {
   if (!team.length) return null;
   const totEFte = team.reduce((s, r) => s + wvKantonEFte(r, horizon), 0);
   const totPt   = team.reduce((s, r) => s + wvKantonPuntenVoor(r.id), 0);
+  // Kantonpunten (open kantonzaken + zittingspakketten) met datum vanaf 'van'; met rid
+  // alleen die van één rechter, met 'tot' alleen vóór die datum.
+  const kantonPunten = (van, tot, rid) => {
+    let p = 0;
+    for (const z of wvZaken) {
+      if (z.afgehandeld || !zaakIsKanton(z)) continue;
+      if ((van && z.datum && z.datum < van) || (tot && (!z.datum || z.datum >= tot))) continue;
+      for (const r of (rid ? [{ id: rid }] : team)) p += zaakBijdrageVoor(z, r.id);
+    }
+    for (const pk of wvPakketten) {
+      if ((van && pk.datum && pk.datum < van) || (tot && (!pk.datum || pk.datum >= tot))) continue;
+      if (rid ? pk.rechter_id === rid : team.some(r => r.id === pk.rechter_id)) p += wvPakketPunten(pk);
+    }
+    return p;
+  };
   const data = team.map(r => {
     const eFte   = wvKantonEFte(r, horizon);
     const huidig = wvKantonPuntenVoor(r.id);
-    const normaal = totEFte > 0 ? eFte / totEFte * totPt : 0;
+    // Zoals bij handel: wie later is aangesteld, krijgt alleen een aandeel van wat er sindsdien
+    // is verdeeld; eigen punten van vóór de aanstelling vallen neutraal uit.
+    let normaal = totEFte > 0
+      ? eFte / totEFte * (r.aanstellingsdatum ? kantonPunten(r.aanstellingsdatum, null) : totPt) : 0;
+    if (r.aanstellingsdatum) normaal += kantonPunten(null, r.aanstellingsdatum, r.id);
     return { r, eFte, huidig, normaal, verschil: huidig - normaal };
   }).sort((a, b) => a.verschil - b.verschil);
   return { horizon, team, totPt, totEFte, data };
@@ -6150,11 +6198,15 @@ function wvImportBouwPreview() {
     if (archiefSet.has(kl)) return 'archief';
     return 'nieuw';
   };
+  // Hetzelfde kenmerk twee keer in de CSV: alleen de eerste wordt geïmporteerd
+  const eersteIndex = new Map();
+  wvImportExtracted.forEach((it, i) => { const kl = it.kenmerk.toLowerCase().trim(); if (!eersteIndex.has(kl)) eersteIndex.set(kl, i); });
+  const isDubbel = (it, i) => eersteIndex.get(it.kenmerk.toLowerCase().trim()) !== i;
   const rechterNaam = wvImportSubTabActief === 'per-rechter' && wvImportRechterKeuze
     ? (wvRechters.find(r => r.id === wvImportRechterKeuze)?.naam || '')
     : '';
-  const rijen = wvImportExtracted.map(item => {
-    const st = statusVan(item);
+  const rijen = wvImportExtracted.map((item, i) => {
+    const st = isDubbel(item, i) ? 'dubbel' : statusVan(item);
     const al = st !== 'nieuw';
     const datumOngeldig = item.datum === 'ongeldig';
     const zwaarteOngeldig = item.zwaarte === 'ongeldig';
@@ -6167,6 +6219,7 @@ function wvImportBouwPreview() {
       : `<span class="badge b-${item.zwaarte}">${item.zwaarte}</span>`;
     const statusTxt = st === 'actief' ? '<span style="font-size:10px;" title="Bestaat al als actieve zaak — wordt niet nogmaals geïmporteerd">al actief</span>'
       : st === 'archief' ? '<span style="font-size:10px;color:#92400e;" title="Bestaat al, maar staat in het archief (eerder afgesloten) — te vinden onder Zaken → Afsluiten">in archief</span>'
+      : st === 'dubbel' ? '<span style="font-size:10px;" title="Dit kenmerk staat al hoger in de lijst — wordt maar één keer geïmporteerd">dubbel in lijst</span>'
       : (datumOngeldig || zwaarteOngeldig) ? '<span style="font-size:10px;color:#dc2626;">overgeslagen</span>'
       : '✓';
     return `<tr style="${overgeslagen?'color:#a8a29e;font-style:italic;':''}">
@@ -6176,7 +6229,7 @@ function wvImportBouwPreview() {
       <td style="font-size:11px;padding:3px 6px;">${statusTxt}</td>
     </tr>`;
   }).join('');
-  const nieuw    = wvImportExtracted.filter(it => statusVan(it) === 'nieuw' && it.datum !== 'ongeldig' && it.zwaarte !== 'ongeldig').length;
+  const nieuw    = wvImportExtracted.filter((it, i) => !isDubbel(it, i) && statusVan(it) === 'nieuw' && it.datum !== 'ongeldig' && it.zwaarte !== 'ongeldig').length;
   const alActief = wvImportExtracted.filter(it => statusVan(it) === 'actief').length;
   const alArchief= wvImportExtracted.filter(it => statusVan(it) === 'archief').length;
   const ongeldig = wvImportExtracted.filter(it => it.datum === 'ongeldig' || it.zwaarte === 'ongeldig').length;
@@ -6211,6 +6264,7 @@ function wvImportUitvoeren() {
     const zaak = { id:wvUid(), kenmerk:item.kenmerk, zwaarte:item.zwaarte, type:'E', datum:item.datum||vandaag, geimporteerd:true };
     if (wvImportSubTabActief === 'per-rechter' && wvImportRechterKeuze) zaak.rechter_id = wvImportRechterKeuze;
     wvZaken.push(zaak);
+    bestaand.add(item.kenmerk.toLowerCase().trim()); // zelfde kenmerk twee keer in één CSV → één zaak
     ingevoerd++;
   }
   wvOpslaan();
@@ -6261,8 +6315,27 @@ function pkInzetStats(naam) {
   return { totaal: zakenVoor.length, ditJaar, laast: datums.length ? datums[datums.length - 1] : null };
 }
 
+// FTE van een vrijstelling: bij een gekozen categorie altijd de actuele waarde van die categorie.
+function pkVrijstFTE(v) {
+  if (v.cat_id) { const c = wvVrijstellingCats.find(c => c.id === v.cat_id); if (c) return parseFloat(c.fte) || 0; }
+  return parseFloat(v.fte) || 0;
+}
+// Alle FTE-aftrek van een teamlid: vrijstellingen én neventaken met een FTE-waarde.
+// Eén bron voor de eFTE op de personeelskaart en in de werklastverdeling.
+function pkAftrekken(k) {
+  const vrij = (k.vrijstellingen||[]).map(v => {
+    const c = v.cat_id ? wvVrijstellingCats.find(c => c.id === v.cat_id) : null;
+    return { label: (c && c.label) || v.label || '', fte: pkVrijstFTE(v) };
+  });
+  const neven = (k.neventaken||[]).map(n => {
+    const c = n.cat_id ? pkCategorieen.find(c => c.id === n.cat_id) : null;
+    return { label: 'Neventaak: ' + ((c && c.label) || n.label || '—'), fte: pkNevenFTE(n) };
+  }).filter(a => a.fte > 0);
+  return [...vrij, ...neven];
+}
+
 function pkEffFTE(k) {
-  const vr = (k.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0), 0);
+  const vr = pkAftrekken(k).reduce((s,a)=>s+a.fte, 0);
   return Math.max(0, (parseFloat(k.fte)||0) - vr);
 }
 
@@ -6949,7 +7022,7 @@ function pkWerkRechterBij(r, k) {
   const nieuw = {
     naam: (k.naam||'').trim() || r.naam, rol,
     fte: isPlvRio ? r.fte : k.fte,
-    vrijstellingen: isPlvRio ? r.vrijstellingen : (k.vrijstellingen||[]).map(v=>({label:v.label,fte:v.fte})),
+    vrijstellingen: isPlvRio ? r.vrijstellingen : pkAftrekken(k),
     aanstellingsdatum: k.aanstellingsdatum || null,
     fte_ingangsdatum:  k.fte_ingangsdatum  || null,
     fte_voor:          k.fte_voor ?? null
@@ -7173,7 +7246,7 @@ function pkVerwijderCategorie(id) {
     pkRender();
   };
   if (inGebruik) {
-    uBevestig('Categorie verwijderen', `"${c?.label||'Categorie'}" is gekoppeld aan een of meer teamleden. De neventaak blijft als vrije invoer bewaard.`, doeVerwijder, 'Verwijderen');
+    uBevestig('Categorie verwijderen', `"${wvEsc(c?.label||'Categorie')}" is gekoppeld aan een of meer teamleden. De neventaak blijft als vrije invoer bewaard.`, doeVerwijder, 'Verwijderen');
   } else {
     doeVerwijder();
   }
@@ -7245,12 +7318,12 @@ function pkPrint() {
 
     const vrijRows = (k.vrijstellingen||[]).map(v => {
       const aftr = v.eenheid==='uren'&&v.uren!=null ? `${v.uren} uur (−${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')} FTE)` : `−${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')} FTE`;
-      return `<tr><td>${v.label||'—'}</td><td style="text-align:right;">${aftr}</td></tr>`;
+      return `<tr><td>${wvEsc(v.label||'—')}</td><td style="text-align:right;">${aftr}</td></tr>`;
     }).join('');
     const nevenRows = (k.neventaken||[]).map(n => {
       const lbl = (n.cat_id ? ((pkCategorieen.find(c=>c.id===n.cat_id)||n).label||n.label) : n.label) || '—';
       const fte = pkNevenFTE(n);
-      return `<tr><td>${lbl||'—'}</td><td style="text-align:right;">−${fte.toFixed(2).replace('.',',')} FTE</td></tr>`;
+      return `<tr><td>${wvEsc(lbl||'—')}</td><td style="text-align:right;">−${fte.toFixed(2).replace('.',',')} FTE</td></tr>`;
     }).join('');
 
     const vrijSectie = vrijRows ? `
@@ -7261,11 +7334,11 @@ function pkPrint() {
       <table class="detail-tabel">${nevenRows}</table>` : '';
     const aandachtSectie = k.aandachtsgebieden ? `
       <div class="sectie-titel">Aandachtsgebieden & notities</div>
-      <div class="aandacht">${k.aandachtsgebieden}</div>` : '';
+      <div class="aandacht">${wvEsc(k.aandachtsgebieden)}</div>` : '';
 
     return `<div class="pk-kaart">
-      <div class="pk-naam">${k.naam}</div>
-      ${aanst ? `<div class="pk-aanst">${aanst}</div>` : ''}
+      <div class="pk-naam">${wvEsc(k.naam)}</div>
+      ${aanst ? `<div class="pk-aanst">${wvEsc(aanst)}</div>` : ''}
       <div class="fte-blok">
         <div class="fte-item"><div class="fte-lbl">FTE</div><div class="fte-val">${(parseFloat(k.fte)||0).toFixed(2).replace('.',',')}</div></div>
         <div class="fte-item"><div class="fte-lbl">Eff. FTE</div><div class="fte-val">${eff.toFixed(2).replace('.',',')}</div></div>
@@ -7421,6 +7494,7 @@ let wvZaakFilter      = '';
 let wvOvExpandedId    = null;
 let wvVerdelingActief = false;
 let wvVerdelingWeek   = null;
+let wvVerdelingJaar   = null; // ISO-jaar van de gestarte verdeling (week 52 kan in januari worden afgerond)
 
 // ── Kanton-module (optioneel, schakelaar per databestand) ───────
 // Zie docs/superpowers/specs/2026-07-06-kanton-werklastverdeling-design.md
@@ -7503,7 +7577,7 @@ async function _autoBackupHerstelDoen(datum) {
   // van Overleggen & Taken, die de backup altijd al bevatte.
   stateApply(data);
   prullenbakOpruimen();
-  wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingOpslaan();
+  wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingJaar = null; wvVerdelingOpslaan();
   wvRenderAll(); wpRenderArchief(); wpRenderWistJeDatArchief(); wpRenderMedSjablonen(); ovRender();
   await fileSave();
   hideFileOverlay();
@@ -7620,6 +7694,8 @@ function stateApply(data) {
     if (!r.afwezigPeriodes) r.afwezigPeriodes = [];
     if (!r.vrijstellingen)  r.vrijstellingen  = [];
     if (r.afwezigHandmatig === undefined) r.afwezigHandmatig = r.afwezig ? true : null;
+    // Een oude "toch aanwezig"-overschrijving zonder lopende periode zou alle latere periodes negeren
+    if (r.afwezigHandmatig === false && !wvHeeftActievePeriode(r)) r.afwezigHandmatig = null;
   });
   if (Array.isArray(data.zaken))              wvZaken             = data.zaken;
   if (Array.isArray(data.snapshots))          wvSnapshots         = data.snapshots;
@@ -7716,7 +7792,8 @@ async function fileLeesVanHandle(handle) {
   stateApply(data);
   _bestandOoitGeladen = true;
   prullenbakOpruimen();
-  wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingOpslaan();
+  // Een open verdeling blijft staan bij opnieuw opstarten met hetzelfde bestand; bij het
+  // openen van een ánder bestand zet fileOpenExisting hem terug.
   // Automatische dagelijkse backup na succesvol laden
   autoBackupMaakIndienNodig();
   return true;
@@ -8031,7 +8108,7 @@ function _fileHerstelBackupDoen(data) {
   // & Taken, kanton en onderdelen) en past de migraties toe.
   stateApply(data);
   prullenbakOpruimen();
-  wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingOpslaan();
+  wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingJaar = null; wvVerdelingOpslaan();
   wvRenderAll(); wpRenderArchief(); wpRenderWistJeDatArchief(); wpRenderMedSjablonen(); ovRender();
   wvOpslaan(); pkOpslaan(); ovOpslaan(); wpSaveDebounced();
   hideFileOverlay();
@@ -8085,6 +8162,7 @@ async function fileOpenExisting() {
     });
     if (!(await fileLeesVanHandle(gekozen))) return;
     await idbSet('dataHandle', wvFileHandle);
+    wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingJaar = null; wvVerdelingOpslaan();
     wvRenderAll();
     wpRenderArchief();
     wpRenderWistJeDatArchief();
@@ -8106,7 +8184,7 @@ async function fileCreateNew() {
     if (_existingHandle) _pickerOpts.startIn = _existingHandle;
     wvFileHandle = await window.showSaveFilePicker(_pickerOpts);
     await idbSet('dataHandle', wvFileHandle);
-    wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingOpslaan();
+    wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingJaar = null; wvVerdelingOpslaan();
     _stateGeladen = true; // nieuw bestand begint bewust met de huidige stand
     await fileSave();
     wvRenderAll();
@@ -8772,7 +8850,10 @@ function trImporteerNaarWeekpost() {
   const week = parseInt(weekStr);
   if (!week) { uMelding('Vul eerst het weeknummer in bij de weekpost.', 'info'); showViewByName('weekpost'); return; }
   wpSorteerArchief();
-  const huidig = wpWeekMailArchief.find(m => parseInt(m.week) === week);
+  // De nieuwste regel met dit weeknummer (archief staat nieuwste eerst), maar niet die van
+  // een jaar terug als deze week nog ontbreekt: meer dan een half jaar oud telt niet
+  const nu = new Date(), nuIdx = wpIsoJaar(nu) * 53 + wpIsoWeek(nu);
+  const huidig = wpWeekMailArchief.find(m => parseInt(m.week) === week && nuIdx - (wpArchiefJaar(m) * 53 + week) <= 26);
   // Vorige week = het eerstvolgende oudere punt (werkt ook over de jaarwisseling heen)
   const vorig  = huidig && wpWeekMailArchief.find(m => wpArchiefSleutel(m) < wpArchiefSleutel(huidig));
   if (!huidig) { uMelding(`Geen werkvoorraaddata gevonden voor week ${week}.<br>Voeg het datapunt toe via Werkvoorraad → Historische data schrijfkast → Handmatig datapunt toevoegen.`, 'info'); return; }
@@ -8903,9 +8984,9 @@ function wvExporteerNaarExcel() {
       p.datum || '', wvPakketTypes.find(t => t.id === p.type_id)?.naam || '',
       wvPakketPunten(p).toFixed(1).replace('.',','), wvRechterNaam(p.rechter_id),
     ]);
-    kantonSheets = uHtmlSheet('Kanton per rechter', kHeader, kRijen.map(r => r.map(c => wvEsc(String(c)))))
-      + uHtmlSheet('Kantonzaken', kzHeader, kzRijen.map(r => r.map(c => wvEsc(String(c)))))
-      + uHtmlSheet('Zittingspakketten', pHeader, pRijen.map(r => r.map(c => wvEsc(String(c)))));
+    kantonSheets = uHtmlSheet('Kanton per rechter', kHeader, kRijen)
+      + uHtmlSheet('Kantonzaken', kzHeader, kzRijen)
+      + uHtmlSheet('Zittingspakketten', pHeader, pRijen);
   }
 
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Overzicht</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>
@@ -8932,7 +9013,7 @@ function wvExporteerZaken() {
       return [z.kenmerk, z.zwaarte, 'MK', wvRechterNaam(z.vz_id)+' (VZ)', wvRechterNaam(z.l1_id), wvRechterNaam(z.l2_id), pt, z.datum||'', imp, z.notitie||''];
     });
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body>
-    ${uHtmlSheet(`Actieve zaken (${rijen.length})`, header, rijen.map(r => r.map(c => wvEsc(String(c)))))}
+    ${uHtmlSheet(`Actieve zaken (${rijen.length})`, header, rijen)}
   </body></html>`;
   uDownloadBlob(html, 'zakenlijst.xls', 'application/vnd.ms-excel;charset=utf-8');
 }
@@ -9246,14 +9327,14 @@ function ovRechterKaartHtml(k) {
   const openRijen = open.length
     ? open.map(p => {
         if (ovBewerkendRpId === p.id) return `
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede9">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede9"
+            onfocusout="if(!this.contains(event.relatedTarget))ovSlaWijzigingRpOp('${p.id}')">
             <span style="font-size:1.1em;color:#ccc;flex-shrink:0">○</span>
             <input id="ov-rp-datum-${p.id}" type="date" value="${p.datum || ''}"
               style="border:1px solid #f59e0b;border-radius:4px;padding:2px 4px;font-family:Arial,sans-serif;font-size:12px;outline:none;background:#fffbf0;flex-shrink:0">
             <input id="ov-rp-edit-${p.id}" type="text" value="${wvEsc(p.tekst)}"
               style="flex:1;min-width:0;border:1px solid #f59e0b;border-radius:4px;padding:2px 6px;font-family:Arial,sans-serif;font-size:13px;outline:none;background:#fffbf0"
-              onkeydown="if(event.key==='Enter')ovSlaWijzigingRpOp('${p.id}');if(event.key==='Escape'){event.stopPropagation();ovAnnuleerWijzigingRp('${pkId}');}"
-              onblur="ovSlaWijzigingRpOp('${p.id}')">
+              onkeydown="if(event.key==='Enter')ovSlaWijzigingRpOp('${p.id}');if(event.key==='Escape'){event.stopPropagation();ovAnnuleerWijzigingRp('${pkId}');}">
             <button onmousedown="event.preventDefault()" onclick="ovAnnuleerWijzigingRp('${pkId}')"
               style="background:none;border:none;cursor:pointer;font-size:12px;color:#aaa;padding:0;flex-shrink:0">✕</button>
           </div>`;
@@ -9547,13 +9628,13 @@ function ovKaartHtml(type) {
         return openTaken.length
           ? openTaken.map(t => {
               if (ovBewerkendTaakId === t.id) return `
-                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede9">
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede9"
+                  onfocusout="if(!this.contains(event.relatedTarget))ovSlaWijzigingTaakOp('${t.id}')">
                   <input type="checkbox" onchange="ovVinkOfHeropen('${t.id}')"
                     style="accent-color:#f59e0b;width:15px;height:15px;flex-shrink:0;cursor:pointer">
                   <input id="ov-taak-edit-tekst-${t.id}" type="text" value="${wvEsc(t.tekst)}"
                     style="flex:1;border:1px solid #f59e0b;border-radius:4px;padding:2px 6px;font-family:Arial,sans-serif;font-size:12px;outline:none;background:#fffbf0"
-                    onkeydown="if(event.key==='Enter')ovSlaWijzigingTaakOp('${t.id}');if(event.key==='Escape'){event.stopPropagation();ovAnnuleerWijzigingTaak('${id}');}"
-                    onblur="ovSlaWijzigingTaakOp('${t.id}')">
+                    onkeydown="if(event.key==='Enter')ovSlaWijzigingTaakOp('${t.id}');if(event.key==='Escape'){event.stopPropagation();ovAnnuleerWijzigingTaak('${id}');}">
                   <select id="ov-taak-edit-label-${t.id}"
                     style="border:1px solid #f59e0b;border-radius:4px;padding:2px 4px;font-size:11px;background:#fffbf0;color:#555;flex-shrink:0">
                     <option value="" ${!t.overleg_id ? 'selected' : ''}>— los —</option>
@@ -9792,13 +9873,13 @@ function ovRenderTaken() {
 
   const taakRij = t => {
     if (ovBewerkendTaakId === t.id) return `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede9">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ede9"
+        onfocusout="if(!this.contains(event.relatedTarget))ovSlaWijzigingTaakOp('${t.id}')">
         <input type="checkbox" ${t.afgevinkt ? 'checked' : ''} onchange="ovVinkOfHeropen('${t.id}')"
           style="accent-color:#f59e0b;width:16px;height:16px;flex-shrink:0;cursor:pointer">
         <input id="ov-taak-edit-tekst-${t.id}" type="text" value="${wvEsc(t.tekst)}"
           style="flex:1;min-width:0;border:1px solid #f59e0b;border-radius:4px;padding:2px 6px;font-family:Arial,sans-serif;font-size:13px;outline:none;background:#fffbf0"
-          onkeydown="if(event.key==='Enter')ovSlaWijzigingTaakOp('${t.id}');if(event.key==='Escape'){event.stopPropagation();ovAnnuleerWijzigingTaak(null);}"
-          onblur="ovSlaWijzigingTaakOp('${t.id}')">
+          onkeydown="if(event.key==='Enter')ovSlaWijzigingTaakOp('${t.id}');if(event.key==='Escape'){event.stopPropagation();ovAnnuleerWijzigingTaak(null);}">
         <select id="ov-taak-edit-label-${t.id}"
           style="border:1px solid #f59e0b;border-radius:4px;padding:2px 4px;font-size:11px;background:#fffbf0;color:#555;flex-shrink:0;max-width:110px">
           <option value="" ${!t.overleg_id ? 'selected' : ''}>— los —</option>
@@ -10112,7 +10193,7 @@ function ovHernoemType(id) {
   titelEl.outerHTML = `<input id="ov-hernoem-${id}" class="form-control" type="text" value="${wvEsc(huidig)}"
     style="font-family:Georgia,serif;font-size:15px;font-weight:700;flex:1;margin:0"
     onblur="ovSlaHernoemOp('${id}')"
-    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value='${wvEsc(huidig)}';this.blur();}">`;
+    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value=this.defaultValue;this.blur();}">`;
   document.getElementById('ov-hernoem-' + id)?.select();
 }
 
@@ -10483,7 +10564,7 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>Neventaken registreren</h3>
-            <p>Voeg neventaken toe voor registratiedoeleinden. Als een neventaak FTE kost (bijv. 0,1 FTE), dan verlaagt dat de effectieve FTE.</p>
+            <p>Voeg neventaken toe voor registratiedoeleinden. Als een neventaak FTE kost (bijv. 0,1 FTE), dan verlaagt dat de effectieve FTE — net als een vrijstelling, dus ook het evenredige aandeel in de werklastverdeling.</p>
             <p>Neventaken zonder FTE-aftrek (standaard: 0) worden alleen geregistreerd maar tellen niet mee in de capaciteitsberekening.</p>
           </div>
           <div class="hdl-card">
