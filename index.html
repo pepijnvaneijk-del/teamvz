@@ -613,7 +613,7 @@
 <!-- MAIN NAVIGATION -->
 <div class="app-nav">
   <button class="app-nav-btn active" onclick="showView('home',this)">🏠 Overzicht</button>
-  <button class="app-nav-btn" style="position:relative;" onclick="showView('weekpost',this)">✉️ Weekpost<span id="wp-concept-dot" title="Er staat een concept-weekmail klaar" style="display:none;position:absolute;top:7px;right:3px;width:7px;height:7px;background:#f59e0b;border-radius:50%;"></span></button>
+  <button id="nav-btn-weekpost" class="app-nav-btn" style="position:relative;" onclick="showView('weekpost',this)">✉️ Weekpost<span id="wp-concept-dot" title="Er staat een concept-weekmail klaar" style="display:none;position:absolute;top:7px;right:3px;width:7px;height:7px;background:#f59e0b;border-radius:50%;"></span></button>
   <button class="app-nav-btn" onclick="showView('werklastverdeling',this)">⚖️ Werklastverdeling</button>
   <button class="app-nav-btn" onclick="showView('personeelskaart',this)">👤 Personeelskaart</button>
   <button class="app-nav-btn" onclick="showView('werkvoorraad',this)">📈 Werkvoorraad</button>
@@ -667,6 +667,7 @@
         <div id="home-aandacht-balk"></div>
         <div id="home-noteer"></div>
         <div id="home-print-rij" style="text-align:right;margin-bottom:6px;">
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 12px;" onclick="onderdelenOpen()" title="Kies welke onderdelen (zoals de weekpost of kanton) je gebruikt">⚙ Onderdelen</button>
           <button class="btn btn-ghost" style="font-size:11px;padding:4px 12px;" onclick="homePrint()" title="Druk het dashboard af of bewaar het als PDF">🖨 Afdrukken</button>
         </div>
         <div id="home-dashboard" class="home-dashboard"></div>
@@ -1296,8 +1297,13 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.9';
+const TOOLKIT_VERSIE = '2026.10.10';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.10', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    '<strong>Weekpost is nu een onderdeel dat je aan of uit zet</strong>, net als kanton. Gebruik je geen weekmail, zet hem dan uit via de nieuwe knop <strong>⚙ Onderdelen</strong> op het startscherm: de knop, de tegel en "📮 Weekpost" bij Snel noteren verdwijnen. Je gegevens blijven bewaard. Kanton zet je daar voortaan ook aan of uit',
+    'De rondleiding bij eerste gebruik vraagt nu ook welke onderdelen je wilt gebruiken',
+    'Opgelost: de knop <strong>Gebruikshandleiding raadplegen</strong> in het venster voor het databestand opende de handleiding achter dat venster, zodat je hem niet zag',
+  ]},
   { versie: '2026.10.9', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     '<strong>Spreiding rechters</strong> op het startscherm toont nu per rechter hoeveel procent die boven of onder het evenredige aandeel zit, met 0 in het midden en de marge als streepjes — net als de ranglijst bij Verdelen. De punten zie je als je een naam aanwijst',
     '<strong>Rondleiding bij eerste gebruik:</strong> een nieuwe gebruiker wordt in een paar stappen op weg geholpen: wat de toolkit doet, databestand aanmaken en de backup-herinnering instellen. Via de Handleiding kun je hem opnieuw bekijken, bijvoorbeeld om de toolkit aan een collega te laten zien',
@@ -1752,10 +1758,11 @@ function homePrint() {
 function homeRender() {
   const el = document.getElementById('home-dashboard');
   if (!el) return;
+  uModulesToepassen();
   homeRenderAandacht();
 
   const browserWaarschuwing = !wvFileHandle ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-family:Arial,sans-serif;font-size:13px;display:flex;align-items:flex-start;gap:12px;"><span style="font-size:18px;flex-shrink:0;">⚠️</span><div><strong>Data wordt tijdelijk opgeslagen in de browser.</strong><br>Als je de browsercache leegt of een andere browser gebruikt, ben je alle data kwijt. <button onclick="showFileOverlay()" style="background:none;border:none;color:#b45309;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">Koppel een bestand →</button></div></div>` : '';
-  const aanDeslag = pkKaarten.length === 0 ? `<div style="background:#f0fdf4;border:1px solid #16a34a;border-radius:8px;padding:14px 16px;margin-bottom:16px;font-family:Arial,sans-serif;font-size:13px;"><div style="font-weight:700;color:#14532d;margin-bottom:8px;">👋 Welkom! Begin hier:</div><ol style="margin:0;padding-left:20px;color:#166534;line-height:2;"><li><strong>Personeelskaart</strong> — voeg alle teamleden toe <button onclick="showViewByName('personeelskaart')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li><li><strong>Werklastverdeling</strong> — importeer het team en begin met verdelen <button onclick="showViewByName('werklastverdeling')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li><li><strong>Weekpost</strong> — stel je naam in en maak je eerste weekmail <button onclick="showViewByName('weekpost')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li></ol></div>` : '';
+  const aanDeslag = pkKaarten.length === 0 ? `<div style="background:#f0fdf4;border:1px solid #16a34a;border-radius:8px;padding:14px 16px;margin-bottom:16px;font-family:Arial,sans-serif;font-size:13px;"><div style="font-weight:700;color:#14532d;margin-bottom:8px;">👋 Welkom! Begin hier:</div><ol style="margin:0;padding-left:20px;color:#166534;line-height:2;"><li><strong>Personeelskaart</strong> — voeg alle teamleden toe <button onclick="showViewByName('personeelskaart')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li><li><strong>Werklastverdeling</strong> — importeer het team en begin met verdelen <button onclick="showViewByName('werklastverdeling')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li>${wpModuleActief ? `<li><strong>Weekpost</strong> — stel je naam in en maak je eerste weekmail <button onclick="showViewByName('weekpost')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li>` : ''}</ol></div>` : '';
   homeRenderNoteer();
   const bannersEl = document.getElementById('home-banners');
   if (bannersEl) bannersEl.innerHTML = aanDeslag + browserWaarschuwing;
@@ -2030,7 +2037,7 @@ function homeRender() {
   }
 
   el.innerHTML =
-    w('✉️', 'Laatste weekpost',  wpHoofd,  wpSub,   '',        'weekpost',          alrt(wpAlert,wpAlertOk), 'homeNaarWeekpostArchief()') +
+    (wpModuleActief ? w('✉️', 'Laatste weekpost',  wpHoofd,  wpSub,   '',        'weekpost',          alrt(wpAlert,wpAlertOk), 'homeNaarWeekpostArchief()') : '') +
     w('⚖️', 'Werklastverdeling', wvHoofd,  wvSub,   '',        'werklastverdeling', alrt(wvAlert),           'homeNaarWvActief()') +
     kantonWidget +
     w('👤', 'Teamcapaciteit',    capHoofd, capSub, trendHtml, 'personeelskaart',   alrt(capAlert)) +
@@ -2922,6 +2929,7 @@ function wvOpslaan() {
   lsZet('teamvz_belasting_kleur', JSON.stringify({onder:wvKleurOnder,rond:wvKleurRond,boven:wvKleurBoven}));
   lsZet('teamvz_prullenbak', JSON.stringify({zaken:wvZakenPrullenbak,pk:pkPrullenbak}));
   lsZet('teamvz_kanton', JSON.stringify(_kantonState()));
+  lsZet('teamvz_modules', JSON.stringify({ weekpost: wpModuleActief }));
   fileSave();
 }
 
@@ -7480,6 +7488,7 @@ let wvVerdelingWeek   = null;
 // ── Kanton-module (optioneel, schakelaar per databestand) ───────
 // Zie docs/superpowers/specs/2026-07-06-kanton-werklastverdeling-design.md
 let wvKantonActief     = false;
+let wpModuleActief     = true;  // weekpost-module (⚙ Onderdelen); standaard aan
 let wvKantonGewichten  = { eenvoudig: 1.0, normaal: 1.5, complex: 2.0 };
 let wvKantonCategorieen = []; // aardzaken: {id, naam} — alleen bevoegde rechters mogen deze zaken
 let wvPakketTypes      = []; // zittingspakketten: {id, naam, punten}
@@ -7626,7 +7635,8 @@ function stateSerialize() {
     taken:              ovTaken,
     rechternotities:    ovRechterNotities,
     weekpostnotities:   ovWeekpostNotities,
-    kanton:             _kantonState()
+    kanton:             _kantonState(),
+    modules:            { weekpost: wpModuleActief }
   };
 }
 
@@ -7643,8 +7653,9 @@ function stateApply(data) {
   wvKleurOnder='#16a34a'; wvKleurRond='#d97706'; wvKleurBoven='#dc2626';
   wvKantonActief=false; wvKantonGewichten={eenvoudig:1.0,normaal:1.5,complex:2.0};
   wvKantonCategorieen=[]; wvPakketTypes=[]; wvPakketten=[];
+  wpModuleActief=true;
 
-  if (!data) return;
+  if (!data) { uModulesToepassen(); return; }
   if (Array.isArray(data.rechters))           wvRechters          = data.rechters;
   // Migratie: legacy 'afwezig' → 'afwezigHandmatig'; ontbrekende afwezigPeriodes
   // en vrijstellingen (backups van vóór die functies) krijgen een lege lijst.
@@ -7674,6 +7685,8 @@ function stateApply(data) {
   if (Array.isArray(data.taken))          ovTaken          = data.taken;
   if (data.rechternotities && typeof data.rechternotities === 'object') ovRechterNotities = data.rechternotities;
   _kantonApply(data.kanton);
+  if (data.modules && data.modules.weekpost === false) wpModuleActief = false;
+  uModulesToepassen();
   if (Array.isArray(data.weekpostnotities)) ovWeekpostNotities = data.weekpostnotities;
   pkSyncAlleNaarWV(); // personeelskaart is leidend; wordt bij de eerstvolgende opslag bewaard
   wpRenderNotities();
@@ -7825,10 +7838,62 @@ function hideFileOverlay() {
 }
 
 // ================================================================
+// ONDERDELEN (modules aan/uit)
+// ================================================================
+// De weekpost is een module zoals kanton: uit = navigatieknop, startschermtegel en
+// "📮 Weekpost" bij Snel noteren verdwijnen; de gegevens blijven bewaard.
+function uModulesToepassen() {
+  const knop = document.getElementById('nav-btn-weekpost');
+  if (knop) knop.style.display = wpModuleActief ? '' : 'none';
+  if (!wpModuleActief && document.getElementById('view-weekpost')?.classList.contains('active')) showViewByName('home');
+}
+function wpModuleToggle(aan) {
+  wpModuleActief = !!aan;
+  uLog('weekpost-module', { actief: wpModuleActief });
+  wvOpslaan();
+  uModulesToepassen();
+  homeRender();
+  homeRenderNoteer();
+  uMelding(wpModuleActief
+    ? '✉️ Weekpost ingeschakeld — je vindt hem weer in de navigatiebalk'
+    : 'Weekpost uitgeschakeld — de gegevens blijven bewaard in je databestand', 'ok');
+}
+// Schakelaars voor de onderdelen; gedeeld door het venster ⚙ Onderdelen en de rondleiding.
+function onderdelenSchakelaarsHtml() {
+  const rij = (aan, onchange, titel, uitleg) => `<label style="display:flex;gap:10px;align-items:flex-start;text-align:left;padding:10px 12px;border:1px solid #e2dcd5;border-radius:8px;margin-bottom:8px;cursor:pointer;font-family:Arial,sans-serif;text-transform:none;letter-spacing:0;font-weight:normal;">
+      <input type="checkbox" ${aan ? 'checked' : ''} onchange="${onchange}" style="margin-top:2px;width:16px;height:16px;flex-shrink:0;">
+      <span><strong style="font-size:13px;color:#1c1917;">${titel}</strong><br><span style="font-size:11px;color:#78716c;line-height:1.5;">${uitleg}</span></span>
+    </label>`;
+  return rij(wpModuleActief, 'wpModuleToggle(this.checked);onderdelenHerteken()', '✉️ Weekpost',
+      'De wekelijkse teammail met mededelingen en de stand van de schrijfkast.') +
+    rij(wvKantonActief, 'wvKantonToggle(this.checked);onderdelenHerteken()', '🏛 Kantonverdeling',
+      'Kantonzaken en zittingen apart verdelen, naast de handelszaken. Alleen nodig als je team ook kanton doet.');
+}
+function onderdelenOpen() {
+  _welkomStap = null;
+  const el = document.getElementById('file-overlay');
+  if (el) el.style.display = 'flex';
+  onderdelenRender();
+}
+function onderdelenRender() {
+  const box = document.getElementById('file-overlay-box');
+  if (!box) return;
+  box.innerHTML = `<div class="file-overlay-icon">⚙</div>
+    <div class="file-overlay-title">Onderdelen</div>
+    <p class="file-overlay-desc">Kies welke onderdelen je gebruikt. Zet je een onderdeel uit, dan verdwijnt het uit beeld; je gegevens blijven bewaard.</p>
+    ${onderdelenSchakelaarsHtml()}
+    <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:6px 0 14px;">Personeelskaart, Werklastverdeling, Werkvoorraad en Overleggen staan altijd aan.</p>
+    <button class="btn btn-primary btn-block" onclick="hideFileOverlay()">Sluiten</button>`;
+}
+function onderdelenHerteken() {
+  if (_welkomStap !== null) welkomRender(); else onderdelenRender();
+}
+
+// ================================================================
 // WELKOMSTRONDLEIDING (eerste gebruik)
 // ================================================================
 // Stappen in hetzelfde venster als de bestandskeuze: 0 welkom · 1 databestand ·
-// 2 backup-herinnering · 3 klaar. _welkomStap is null zolang de rondleiding dicht is.
+// 2 onderdelen · 3 backup-herinnering · 4 klaar. _welkomStap is null zolang de rondleiding dicht is.
 let _welkomStap = null;
 let _welkomBrowser = false; // gekozen voor (of aangewezen op) opslag in de browser
 
@@ -7877,7 +7942,7 @@ function welkomRender() {
   const st = _welkomStap;
   const klein = 'font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:4px 0 10px;';
   const bolletjes = '<div style="display:flex;justify-content:center;gap:6px;margin-bottom:16px;">' +
-    [0,1,2,3].map(i => `<span style="width:8px;height:8px;border-radius:50%;background:${i===st?'#c2410c':i<st?'#fdba74':'#e2dcd5'};"></span>`).join('') + '</div>';
+    [0,1,2,3,4].map(i => `<span style="width:8px;height:8px;border-radius:50%;background:${i===st?'#c2410c':i<st?'#fdba74':'#e2dcd5'};"></span>`).join('') + '</div>';
   const terug = `<button class="btn btn-ghost btn-block" style="margin-top:8px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomNaar(${st-1})">← Terug</button>`;
   const verder = (stap, tekst='Volgende →') => `<button class="btn btn-primary btn-block" onclick="welkomNaar(${stap})">${tekst}</button>`;
   let html = '';
@@ -7907,15 +7972,22 @@ function welkomRender() {
       <p class="file-overlay-desc">De toolkit bewaart alles in één databestand. Zet dat op een vaste plek, bijvoorbeeld in je Teams- of netwerkmap.</p>
       ${keuze}${terug}`;
   } else if (st === 2) {
+    html = `<div class="file-overlay-icon">🧩</div>
+      <div class="file-overlay-title">Stap 2 · Welke onderdelen gebruik je?</div>
+      <p class="file-overlay-desc">Personeelskaart, Werklastverdeling, Werkvoorraad en Overleggen staan altijd aan. Deze twee kun je zelf kiezen — later aanpassen kan via <strong>⚙ Onderdelen</strong> op het startscherm.</p>
+      ${onderdelenSchakelaarsHtml()}
+      <div style="height:8px;"></div>
+      ${verder(3)}${terug}`;
+  } else if (st === 3) {
     const inp = key => `<input type="number" min="1" max="365" value="${uBackupDrempels[key]}" style="width:54px;font-size:13px;padding:3px 5px;text-align:center;border:1px solid #d4cfc8;border-radius:4px;" onchange="uZetBackupDrempel('${key}', this.value)">`;
     html = `<div class="file-overlay-icon">💾</div>
-      <div class="file-overlay-title">Stap 2 · Backup-herinnering</div>
+      <div class="file-overlay-title">Stap 3 · Backup-herinnering</div>
       <p class="file-overlay-desc">Een backup is een reservekopie van al je gegevens. Maak er af en toe een met de knop <strong>💾 Backup</strong> bovenaan en bewaar hem in dezelfde map als je databestand.</p>
       <div style="font-family:Arial,sans-serif;font-size:13px;color:#57534e;line-height:2.2;margin-bottom:6px;">
         Herinner me na ${inp('waarschuw')} dagen zonder backup,<br>dringend na ${inp('dringend')} dagen.
       </div>
       <p style="${klein}margin-bottom:18px;">Het bolletje bij de Backup-knop wordt dan oranje en daarna rood. Je kunt dit later aanpassen via de knop 📁 rechtsboven.</p>
-      ${verder(3)}${terug}`;
+      ${verder(4)}${terug}`;
   } else {
     html = `<div class="file-overlay-icon">✅</div>
       <div class="file-overlay-title">Klaar!</div>
@@ -8115,6 +8187,7 @@ function _stateUitLocalStorage() {
   lees('teamvz_ov_rechternotities','rechternotities');
   lees('teamvz_ov_weekpostnotities','weekpostnotities');
   lees('teamvz_kanton',            'kanton');
+  lees('teamvz_modules',           'modules');
   return data;
 }
 
@@ -8962,7 +9035,7 @@ function ovNoteerHtml(prefix) {
     <div class="ov-nt-rij">
       <span class="ov-nt-label">Waar hoort het bij?</span>
       <button type="button" class="ov-nt-chip ov-nt-chip-std" onclick="ovNoteerOpslaan('${prefix}','taak')">✅ Taak</button>
-      <button type="button" class="ov-nt-chip" title="Bewaren voor de volgende weekmail" onclick="ovNoteerOpslaan('${prefix}','weekpost')">📮 Weekpost</button>
+      ${wpModuleActief ? `<button type="button" class="ov-nt-chip" title="Bewaren voor de volgende weekmail" onclick="ovNoteerOpslaan('${prefix}','weekpost')">📮 Weekpost</button>` : ''}
       ${typen.map(t => `<button type="button" class="ov-nt-chip" onclick="ovNoteerOpslaan('${prefix}','overleg','${t.id}')">📋 ${wvEsc(t.naam)}</button>`).join('')}
       ${rechters.length ? `<select id="${prefix}-rechter" class="ov-nt-chip" title="Noteren bij een rechter" onchange="ovNoteerOpslaan('${prefix}','rechter',this.value)"><option value="">👤 Rechter…</option>${rechters.map(k => `<option value="${wvEsc(String(k.id))}">${wvEsc(k.naam || '')}</option>`).join('')}</select>` : ''}
     </div>
@@ -10253,7 +10326,7 @@ document.addEventListener('keydown', function(e) {
 
 <!-- HANDLEIDING OVERLAY -->
 <style>
-#handleiding-overlay{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.55);}
+#handleiding-overlay{display:none;position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,0.55);}
 #handleiding-overlay .hdl-wrap{position:absolute;inset:0;display:flex;flex-direction:column;background:#f2ede8;}
 #handleiding-overlay .hdl-header{background:#292524;color:#fdf8f0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 #handleiding-overlay .hdl-header-label{font-family:Arial,sans-serif;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#f59e0b;margin-bottom:3px;}
@@ -10336,6 +10409,7 @@ document.addEventListener('keydown', function(e) {
             <h3>Eerste keer opstarten: de rondleiding</h3>
             <p>Bij het allereerste gebruik start een korte <strong>rondleiding</strong>. Daarin maak je je databestand aan (al je gegevens worden in dit JSON-bestand opgeslagen — niet in de browser) en stel je in na hoeveel dagen de toolkit je aan een backup herinnert. Heb je al een databestand, kies dan <kbd>📂 Ik heb al een databestand</kbd>.</p>
             <p><button class="btn btn-outline" style="font-size:12px;" onclick="welkomOpnieuw()">👋 Rondleiding opnieuw bekijken</button></p>
+            <p>In de rondleiding kies je ook welke <strong>onderdelen</strong> je gebruikt: de Weekpost en de Kantonverdeling kun je aan- of uitzetten. Later aanpassen doe je met <kbd>⚙ Onderdelen</kbd> op het startscherm. Uitzetten gooit niets weg.</p>
             <p>Zo maak je het databestand aan:</p>
             <ol class="hdl-steps">
               <li><p>Klik in stap 1 van de rondleiding op <kbd>✨ Databestand aanmaken</kbd> (later kan het ook via de knop 📁 rechtsboven).</p></li>
@@ -10557,7 +10631,7 @@ document.addEventListener('keydown', function(e) {
           <p style="font-family:Georgia,serif;font-size:14px;line-height:1.65;margin-bottom:14px;">Optionele uitbreiding voor teams die naast handel ook kantonzaken verdelen. Kanton heeft een <strong>eigen puntenbalans</strong> naast de handel-balans, met eigen zwaartes en zittingspakketten.</p>
           <div class="hdl-card">
             <h3>Aan- en uitzetten</h3>
-            <p>De module staat <strong>standaard uit</strong>. Aanzetten doe je via <strong>Werklastverdeling → Instellingen → 🏛 Kanton-module</strong>. Er verschijnt dan een gebied-schakelaar (⚖️ Handel | 🏛 Kanton) op de tabbladen Verdelen en Inzicht, een kanton-sectie in het Team-tabblad en een dashboard-widget.</p>
+            <p>De module staat <strong>standaard uit</strong>. Aanzetten doe je via <kbd>⚙ Onderdelen</kbd> op het startscherm (of via <strong>Werklastverdeling → Instellingen → 🏛 Kanton-module</strong>). Er verschijnt dan een gebied-schakelaar (⚖️ Handel | 🏛 Kanton) op de tabbladen Verdelen en Inzicht, een kanton-sectie in het Team-tabblad en een dashboard-widget.</p>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span><strong>De keuze geldt per databestand, niet per computer.</strong> De schakelaar wordt bewaard in je databestand. Deel je het toolkit-bestand (toolkit.html) met een collega die een eigen databestand gebruikt, dan ziet die collega de module dus <em>niet</em> — tenzij hij hem zelf aanzet in zijn eigen bestand.</span></div>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span><strong>Uitzetten gooit niets weg.</strong> Alle kanton-gegevens (zaken, zittingen, instellingen) blijven in het databestand bewaard en verschijnen weer zodra je de module opnieuw aanzet.</span></div>
           </div>
@@ -10612,6 +10686,7 @@ document.addEventListener('keydown', function(e) {
         <section id="hdl-weekpost">
           <div class="hdl-section-header"><span class="hdl-section-icon">✉️</span><span class="hdl-section-title">Weekpost</span></div>
           <p style="font-family:Georgia,serif;font-size:14px;line-height:1.65;margin-bottom:14px;">Met de Weekpost stel je elke week de teammail op. Je vult de informatie in via het formulier, bekijkt een preview en verstuurt vanuit Outlook.</p>
+          <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span><strong>Geen weekmail in jouw team?</strong> Zet de weekpost uit via <kbd>⚙ Onderdelen</kbd> op het startscherm. De knop Weekpost, de tegel op het startscherm en <strong>📮 Weekpost</strong> bij Snel noteren verdwijnen dan; je gegevens blijven bewaard. De cijfers van de schrijfkast voor de Werkvoorraad voeg je dan zelf toe via <strong>Werkvoorraad → Handmatig datapunt toevoegen</strong>.</span></div>
           <div class="hdl-card">
             <h3>Door de week verzamelen</h3>
             <p>Denk je door de week "dit moet in de weekmail"? Klik op <kbd>＋ Noteren</kbd> (of druk op <kbd>N</kbd>), typ het op en klik op <strong>📮 Weekpost</strong>. Bij het invullen van de weekpost staan die notities bovenaan klaar. Klik per notitie op de rubriek waar hij in moet (Bijzonderheid, Mededelingen, Wel en wee, Weekend of Wist je dat); de tekst komt daar als nieuwe regel te staan.</p>
