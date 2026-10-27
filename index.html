@@ -1297,8 +1297,11 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.10';
+const TOOLKIT_VERSIE = '2026.10.11';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.11', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    'De handleiding (Aan de slag → De toolkit openen) legt nu uit hoe je de toolkit als los bestand downloadt, voor wie dat liever heeft dan het webadres',
+  ]},
   { versie: '2026.10.10', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     '<strong>Weekpost is nu een onderdeel dat je aan of uit zet</strong>, net als kanton. Gebruik je geen weekmail, zet hem dan uit via de nieuwe knop <strong>⚙ Onderdelen</strong> op het startscherm: de knop, de tegel en "📮 Weekpost" bij Snel noteren verdwijnen. Je gegevens blijven bewaard. Kanton zet je daar voortaan ook aan of uit',
     'De rondleiding bij eerste gebruik vraagt nu ook welke onderdelen je wilt gebruiken',
@@ -10402,7 +10405,14 @@ document.addEventListener('keydown', function(e) {
             <h3>De toolkit openen</h3>
             <p>Open de toolkit via het webadres <a href="https://pepijnvaneijk-del.github.io/teamvz/" target="_blank" rel="noopener"><strong>pepijnvaneijk-del.github.io/teamvz</strong></a>. Zet het adres bij je favorieten, dan heb je de toolkit met één klik open. Je krijgt zo altijd vanzelf de nieuwste versie; downloaden is niet meer nodig.</p>
             <div class="hdl-tip"><span class="hdl-tip-icon">🔒</span><span>Je gegevens gaan <strong>niet</strong> naar internet. Ook via het webadres blijft alles op je eigen computer: in de browser en in je eigen databestand.</span></div>
-            <p>Liever een los bestand? De toolkit is ook één HTML-bestand, <strong>toolkit.html</strong>, dat je opent door erop te dubbelklikken in Windows Verkenner. Gebruik dan wel óf het webadres óf het bestand, niet afwisselend: ze hebben elk hun eigen browseropslag en kunnen elkaars wijzigingen in het databestand overschrijven. Stap je over op het webadres, koppel je databestand daar dan één keer opnieuw.</p>
+            <p>Liever een los bestand? De toolkit is ook één HTML-bestand dat je op je computer kunt zetten en opent door erop te dubbelklikken in Windows Verkenner. Zo download je het:</p>
+            <ol class="hdl-steps">
+              <li><p>Ga naar <a href="https://github.com/pepijnvaneijk-del/teamvz" target="_blank" rel="noopener"><strong>github.com/pepijnvaneijk-del/teamvz</strong></a> (inloggen is niet nodig).</p></li>
+              <li><p>Klik in de lijst op <strong>index.html</strong>.</p></li>
+              <li><p>Klik rechtsboven op het pijltje omlaag (<strong>Download raw file</strong>). Het bestand komt in je map Downloads.</p></li>
+              <li><p>Zet het in een vaste map en geef het eventueel een duidelijke naam, bijvoorbeeld <strong>toolkit.html</strong>.</p></li>
+            </ol>
+            <div class="hdl-warn"><span class="hdl-tip-icon">⚠️</span><span>Een gedownload bestand wordt <strong>niet vanzelf bijgewerkt</strong>; voor een nieuwe versie download je het opnieuw. Gebruik óf het webadres óf het bestand, niet afwisselend: ze hebben elk hun eigen browseropslag en kunnen elkaars wijzigingen in het databestand overschrijven. Wissel je toch, koppel je databestand dan één keer opnieuw.</span></div>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>De toolkit werkt het best in <strong>Microsoft Edge</strong> of Google Chrome. Internet Explorer werkt niet.</span></div>
           </div>
           <div class="hdl-card">
