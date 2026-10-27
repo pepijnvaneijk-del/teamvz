@@ -653,7 +653,7 @@
 </div>
 
 <!-- BESTANDSOVERLAY -->
-<div id="file-overlay" class="file-overlay" style="display:none;" onclick="hideFileOverlay()">
+<div id="file-overlay" class="file-overlay" style="display:none;" onclick="fileOverlayAchtergrondKlik()">
   <div class="file-overlay-box" id="file-overlay-box" onclick="event.stopPropagation()"></div>
 </div>
 
@@ -1298,8 +1298,14 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.13';
+const TOOLKIT_VERSIE = '2026.10.14';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.14', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    'Opgelost: wie zonder databestand (in de browser) werkt, kon bij het opnieuw opstarten het <strong>archief van de weekmails</strong> en de wist-je-dat-lijst kwijtraken. Bij een traag databestand (bijv. in Teams) kon zelfs een lege stand in het bestand terechtkomen. De toolkit slaat nu pas iets op als je gegevens echt geladen zijn',
+    'Opgelost: als een databestand niet gelezen kon worden, bleef de toolkit eraan gekoppeld en kon de volgende wijziging het bestand overschrijven. Nu blijft je vorige bestand gekoppeld en wordt het onleesbare bestand niet aangeraakt',
+    'Opgelost: bij <strong>Herstellen van handmatige backup</strong> werden Overleggen &amp; Taken, de kantongegevens en de onderdelen-keuze niet teruggezet',
+    'Het opstartvenster sluit niet meer als je er per ongeluk naast klikt; kies eerst waar je gegevens staan',
+  ]},
   { versie: '2026.10.13', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     '<strong>Wat is nieuw</strong> toont nu alle versies die je nog niet gezien had, niet alleen de laatste — zo mis je geen belangrijke wijziging',
     '<strong>Bescherming tegen een oude versie:</strong> opent een oudere toolkit (bijv. een eerder gedownload bestand) een databestand dat al door een nieuwere versie is opgeslagen, dan krijg je een waarschuwing en wordt er niets in het bestand overschreven. Zo gaan er geen gegevens verloren',
@@ -2249,6 +2255,7 @@ function wpLaadState(s) {
 function wpSaveDebounced() {
   clearTimeout(wpSaveTimer);
   wpSaveTimer = setTimeout(() => {
+    if (!_stateGeladen) return;
     lsZet('teamvz_weekpost',     JSON.stringify(wpGetState()));
     lsZet('teamvz_weekmails',    JSON.stringify(wpWeekMailArchief));
     lsZet('teamvz_wistjedatarchief', JSON.stringify(wpWistJeDatArchief));
@@ -2846,6 +2853,7 @@ function prullenbakOpruimen() {
 }
 
 function wvOpslaan() {
+  if (!_stateGeladen) return; // nog niets geladen: de lege beginstand niet wegschrijven
   lsZet('teamvz_rechters',         JSON.stringify(wvRechters));
   lsZet('teamvz_zaken',            JSON.stringify(wvZaken));
   lsZet('teamvz_snapshots',        JSON.stringify(wvSnapshots));
@@ -2876,6 +2884,7 @@ function _kantonApply(k) {
 }
 
 function pkOpslaan() {
+  if (!_stateGeladen) return; // nog niets geladen: de lege beginstand niet wegschrijven
   lsZet('teamvz_personeelskaarten', JSON.stringify(pkKaarten));
   lsZet('teamvz_neventaken_cat',    JSON.stringify(pkCategorieen));
   lsZet('teamvz_prullenbak', JSON.stringify({zaken:wvZakenPrullenbak,pk:pkPrullenbak}));
@@ -7418,6 +7427,10 @@ let wvVerdelingWeek   = null;
 let wvKantonActief     = false;
 let wpModuleActief     = true;  // weekpost-module (⚙ Onderdelen); standaard aan
 let _dataNieuwereVersie = null; // versie uit het databestand als die nieuwer is dan deze toolkit
+// Pas true na de eerste stateApply (bestand, browseropslag of backup) of bij een nieuw bestand.
+// Tot dan wordt er niets opgeslagen: anders overschrijft de lege beginstand je gegevens
+// terwijl het opstartvenster nog op een keuze wacht of het bestand nog wordt gelezen.
+let _stateGeladen = false;
 let wvKantonGewichten  = { eenvoudig: 1.0, normaal: 1.5, complex: 2.0 };
 let wvKantonCategorieen = []; // aardzaken: {id, naam} — alleen bevoegde rechters mogen deze zaken
 let wvPakketTypes      = []; // zittingspakketten: {id, naam, punten}
@@ -7589,6 +7602,7 @@ function stateApply(data) {
   wvKantonCategorieen=[]; wvPakketTypes=[]; wvPakketten=[];
   wpModuleActief=true;
   _dataNieuwereVersie = null;
+  _stateGeladen = true;
 
   if (!data) { uModulesToepassen(); return; }
   // Opgeslagen door een nieuwere toolkit (bijv. de webversie, terwijl dit een oude download
@@ -7640,7 +7654,7 @@ function _fileBouwJson() {
 }
 
 async function fileSave() {
-  if (!wvFileHandle || _sessionGeblokkeerd) return;
+  if (!wvFileHandle || _sessionGeblokkeerd || !_stateGeladen) return;
   if (_dataNieuwereVersie) { setFileStatus('nieuwer', ''); return; }
   // Schrijfslot: als er al een write loopt, markeer als wachtend en stop
   if (_fileSaveLock) { _fileSavePending = true; return; }
@@ -7691,10 +7705,12 @@ async function fileLeesVanHandle(handle) {
       data = JSON.parse(text); // gooit fout bij ongeldig JSON
     }
   } catch(e) {
-    setFileStatus('fout', '');
-    uMelding('Het databestand kon niet worden geladen: ' + wvEsc(e.message) + '<br>Je huidige gegevens blijven bewaard. Controleer het bestand en probeer opnieuw, of herstel een backup.', 'fout');
-    return; // NIET resetten — huidige data behouden
+    setFileStatus(wvFileHandle ? 'verbonden' : 'fout', wvFileHandle ? wvFileHandle.name : '');
+    uMelding('Het databestand kon niet worden geladen: ' + wvEsc(e.message) + '<br>Je huidige gegevens blijven bewaard en er wordt niets in dat bestand geschreven. Controleer het bestand en probeer opnieuw, of herstel een backup.', 'fout');
+    return false; // NIET resetten en NIET koppelen — huidige data en koppeling behouden
   }
+  // Lezen geslaagd: pas nu koppelen, zodat een onleesbaar bestand nooit overschreven wordt
+  wvFileHandle = handle;
 
   // Lezen geslaagd — nu pas resetten en opvullen via de centrale stateApply
   stateApply(data);
@@ -7703,6 +7719,7 @@ async function fileLeesVanHandle(handle) {
   wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingOpslaan();
   // Automatische dagelijkse backup na succesvol laden
   autoBackupMaakIndienNodig();
+  return true;
 }
 
 function showFileOverlay() {
@@ -7769,6 +7786,12 @@ function showFileOverlay() {
       <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:0 0 8px;">💡 Zet het databestand op een vaste plek, bijv. in je Teams- of netwerkmap, en bewaar je backups in dezelfde map.</p>
       <button class="btn btn-ghost btn-block btn-klein" onclick="uHandleidingOpen()">📖 Gebruikshandleiding raadplegen</button>`;
   }
+}
+
+// Klik naast het venster sluit het alleen als er al gegevens geladen zijn en de rondleiding
+// niet loopt; bij het opstarten moet eerst een keuze gemaakt worden (anders wordt niets opgeslagen).
+function fileOverlayAchtergrondKlik() {
+  if (_stateGeladen && _welkomStap === null) hideFileOverlay();
 }
 
 function hideFileOverlay() {
@@ -8004,23 +8027,13 @@ async function fileHerstelBackup() {
 }
 
 function _fileHerstelBackupDoen(data) {
-  if (Array.isArray(data.rechters))          wvRechters         = data.rechters;
-  if (Array.isArray(data.zaken))             wvZaken            = data.zaken;
-  if (Array.isArray(data.snapshots))         wvSnapshots        = data.snapshots;
-  if (Array.isArray(data.vrijstellingcats))  wvVrijstellingCats = data.vrijstellingcats;
-  if (Array.isArray(data.verdeelweken))      wvVerdeelweken     = data.verdeelweken;
-  if (Array.isArray(data.personeelskaarten)) pkKaarten          = data.personeelskaarten;
-  if (Array.isArray(data.neventakencat))     pkCategorieen      = data.neventakencat;
-  if (Array.isArray(data.weekmails))         wpWeekMailArchief       = data.weekmails;
-  if (Array.isArray(data.wistjedatarchief))  wpWistJeDatArchief      = data.wistjedatarchief;
-  if (Array.isArray(data.medsjablonen))      wpMededelingenSjablonen = data.medsjablonen;
-  if (data.gewichten)            wvGewichten      = {...wvGewichten,...data.gewichten};
-  if (data.mkVzBonus    != null) wvMkVzBonus      = data.mkVzBonus;
-  if (data.belastingMarge != null) wvBelastingMarge = data.belastingMarge;
-  if (data.belastingKleur) { const k=data.belastingKleur; wvKleurOnder=k.onder||wvKleurOnder; wvKleurRond=k.rond||wvKleurRond; wvKleurBoven=k.boven||wvKleurBoven; }
-  if (data.weekpost) wpLaadState(data.weekpost);
-  wvRenderAll(); wpRenderArchief(); wpRenderWistJeDatArchief(); wpRenderMedSjablonen();
-  wvOpslaan(); pkOpslaan();
+  // Zelfde routine als bestand laden en automatische backup: zet álles terug (ook Overleggen
+  // & Taken, kanton en onderdelen) en past de migraties toe.
+  stateApply(data);
+  prullenbakOpruimen();
+  wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingOpslaan();
+  wvRenderAll(); wpRenderArchief(); wpRenderWistJeDatArchief(); wpRenderMedSjablonen(); ovRender();
+  wvOpslaan(); pkOpslaan(); ovOpslaan(); wpSaveDebounced();
   hideFileOverlay();
   uMelding('Backup succesvol hersteld.', 'ok');
   uLog('backup-hersteld');
@@ -8043,9 +8056,8 @@ async function fileHeropenen() {
   try {
     const perm = await wvPendingHandle.requestPermission({mode:'readwrite'});
     if (perm === 'granted') {
-      wvFileHandle = wvPendingHandle;
+      if (!(await fileLeesVanHandle(wvPendingHandle))) return; // venster blijft open voor een andere keuze
       wvPendingHandle = null;
-      await fileLeesVanHandle(wvFileHandle);
       wvRenderAll();
       wpRenderArchief();
       wpRenderWistJeDatArchief();
@@ -8067,12 +8079,12 @@ async function fileHeropenen() {
 
 async function fileOpenExisting() {
   try {
-    [wvFileHandle] = await window.showOpenFilePicker({
+    const [gekozen] = await window.showOpenFilePicker({
       types: [{description:'Toolkit data', accept:{'application/json':['.json']}}],
       multiple: false
     });
+    if (!(await fileLeesVanHandle(gekozen))) return;
     await idbSet('dataHandle', wvFileHandle);
-    await fileLeesVanHandle(wvFileHandle);
     wvRenderAll();
     wpRenderArchief();
     wpRenderWistJeDatArchief();
@@ -8095,6 +8107,7 @@ async function fileCreateNew() {
     wvFileHandle = await window.showSaveFilePicker(_pickerOpts);
     await idbSet('dataHandle', wvFileHandle);
     wvVerdelingActief = false; wvVerdelingWeek = null; wvVerdelingOpslaan();
+    _stateGeladen = true; // nieuw bestand begint bewust met de huidige stand
     await fileSave();
     wvRenderAll();
     uLog('bestand-aangemaakt');
@@ -8189,8 +8202,7 @@ async function initStorage() {
       let perm = await stored.queryPermission({mode:'readwrite'});
       if (perm === 'granted') {
         // Toestemming nog actief: direct inladen zonder overlay
-        wvFileHandle = stored;
-        await fileLeesVanHandle(wvFileHandle);
+        if (!(await fileLeesVanHandle(stored))) { wvPendingHandle = stored; showFileOverlay(); return; }
         wvRenderAll();
         wpRenderArchief();
         wpRenderWistJeDatArchief();
@@ -9118,6 +9130,7 @@ function ovUpdateNavBadge() {
 }
 
 function ovOpslaan() {
+  if (!_stateGeladen) return; // nog niets geladen: de lege beginstand niet wegschrijven
   lsZet('teamvz_overlegtypen',   JSON.stringify(ovOverlegtypen));
   lsZet('teamvz_bespreekpunten', JSON.stringify(ovBespreekpunten));
   lsZet('teamvz_vergaderingen',  JSON.stringify(ovVergaderingen));
