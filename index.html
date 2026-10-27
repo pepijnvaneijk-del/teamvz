@@ -1297,8 +1297,11 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.11';
+const TOOLKIT_VERSIE = '2026.10.12';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.12', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    'De rondleiding sluit af met de eerste stappen op een rij en een knop naar <strong>Aan de slag</strong> in de handleiding, zodat duidelijk is waar je begint',
+  ]},
   { versie: '2026.10.11', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     'De handleiding (Aan de slag → De toolkit openen) legt nu uit hoe je de toolkit als los bestand downloadt, voor wie dat liever heeft dan het webadres',
   ]},
@@ -7932,12 +7935,13 @@ function welkomOverslaan() {
   uLog('welkom-overgeslagen');
   if (wvFileHandle || _welkomBrowser) hideFileOverlay(); else showFileOverlay();
 }
-function welkomKlaar(naarPk) {
+function welkomKlaar(naar) {
   lsZet('teamvz_welkom_gedaan', '1');
-  uLog('welkom-afgerond');
+  uLog('welkom-afgerond', { naar: naar || 'home' });
   hideFileOverlay();
   homeRender();
-  if (naarPk) showViewByName('personeelskaart');
+  if (naar === 'pk') showViewByName('personeelskaart');
+  if (naar === 'hdl') uHandleidingOpen('aan-de-slag');
 }
 function welkomRender() {
   const box = document.getElementById('file-overlay-box');
@@ -7993,10 +7997,15 @@ function welkomRender() {
       ${verder(4)}${terug}`;
   } else {
     html = `<div class="file-overlay-icon">✅</div>
-      <div class="file-overlay-title">Klaar!</div>
-      <p class="file-overlay-desc">Begin met je team: voeg in de <strong>Personeelskaart</strong> je teamleden toe met hun FTE en vrijstellingen. Daarna kun je in de <strong>Werklastverdeling</strong> zaken gaan verdelen.</p>
-      <button class="btn btn-primary btn-block" onclick="welkomKlaar(true)">👥 Naar de Personeelskaart</button>
-      <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="welkomKlaar(false)">Naar het startscherm</button>
+      <div class="file-overlay-title">Klaar! Zo ga je verder</div>
+      <ol style="text-align:left;font-family:Arial,sans-serif;font-size:13px;color:#57534e;line-height:1.6;margin:0 0 18px;padding-left:22px;">
+        <li><strong>Personeelskaart</strong> — voeg je teamleden toe met hun FTE en vrijstellingen.</li>
+        <li><strong>Werklastverdeling</strong> — je team staat er dan vanzelf in; begin met het verdelen van zaken.</li>${wpModuleActief ? `
+        <li><strong>Weekpost</strong> — vul je naam in en maak je eerste weekmail.</li>` : ''}
+      </ol>
+      <button class="btn btn-primary btn-block" onclick="welkomKlaar('pk')">👥 Begin met de Personeelskaart</button>
+      <button class="btn btn-dark btn-block" style="margin-top:8px;" onclick="welkomKlaar('hdl')">📖 Lees eerst: Aan de slag</button>
+      <button class="btn btn-ghost btn-block" style="margin-top:8px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomKlaar(false)">Naar het startscherm</button>
       <p style="${klein}margin-top:12px;">Deze rondleiding kun je later opnieuw bekijken via de 📖 Handleiding.</p>
       ${terug}`;
   }
