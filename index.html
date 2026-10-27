@@ -1296,8 +1296,11 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.7';
+const TOOLKIT_VERSIE = '2026.10.8';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.8', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    '<strong>De toolkit staat nu ook online:</strong> open hem via <strong>pepijnvaneijk-del.github.io/teamvz</strong> en je hebt altijd vanzelf de nieuwste versie, zonder te downloaden. Je gegevens blijven gewoon op je eigen computer. Stap je over, koppel je databestand dan één keer opnieuw (zie Handleiding → Aan de slag)',
+  ]},
   { versie: '2026.10.7', datum: 'oktober 2026', releasedatum: '07-10-2026', items: [
     '<strong>Weekpost-archief is nu leesbaar:</strong> klik in het tabblad Archief op een week om de volledige verzonden mail terug te lezen',
     'Weekpost versturen kost minder handelingen. Na <strong>Mail verstuurd — archiveren</strong> staat de weekpost altijd direct klaar voor de volgende week; het vinkje "Doorrollen" is weg. Ook na <strong>Kopieer naar klembord</strong> krijg je nu de vraag om te archiveren',
@@ -10213,7 +10216,9 @@ document.addEventListener('keydown', function(e) {
           <div class="hdl-section-header"><span class="hdl-section-icon">🚀</span><span class="hdl-section-title">Aan de slag</span></div>
           <div class="hdl-card">
             <h3>De toolkit openen</h3>
-            <p>De toolkit is één HTML-bestand: <strong>toolkit.html</strong>. Je opent het gewoon door erop te dubbelklikken in Windows Verkenner. Het opent in je browser als een normale webpagina.</p>
+            <p>Open de toolkit via het webadres <a href="https://pepijnvaneijk-del.github.io/teamvz/" target="_blank" rel="noopener"><strong>pepijnvaneijk-del.github.io/teamvz</strong></a>. Zet het adres bij je favorieten, dan heb je de toolkit met één klik open. Je krijgt zo altijd vanzelf de nieuwste versie; downloaden is niet meer nodig.</p>
+            <div class="hdl-tip"><span class="hdl-tip-icon">🔒</span><span>Je gegevens gaan <strong>niet</strong> naar internet. Ook via het webadres blijft alles op je eigen computer: in de browser en in je eigen databestand.</span></div>
+            <p>Liever een los bestand? De toolkit is ook één HTML-bestand, <strong>toolkit.html</strong>, dat je opent door erop te dubbelklikken in Windows Verkenner. Gebruik dan wel óf het webadres óf het bestand, niet afwisselend: ze hebben elk hun eigen browseropslag en kunnen elkaars wijzigingen in het databestand overschrijven. Stap je over op het webadres, koppel je databestand daar dan één keer opnieuw.</p>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>De toolkit werkt het best in <strong>Microsoft Edge</strong> of Google Chrome. Internet Explorer werkt niet.</span></div>
           </div>
           <div class="hdl-card">
@@ -10221,11 +10226,11 @@ document.addEventListener('keydown', function(e) {
             <p>Bij het eerste opstarten vraagt de toolkit of je een databestand wilt aanmaken of koppelen. Al je gegevens worden in dit JSON-bestand opgeslagen — niet in de browser.</p>
             <ol class="hdl-steps">
               <li><p>Klik op <kbd>✨ Nieuw databestand aanmaken</kbd> in het startscherm (de bovenste, oranje knop).</p></li>
-              <li><p>Kies een map op je computer waar je het bestand wilt bewaren — bij voorkeur dezelfde map als <strong>toolkit.html</strong> zelf.</p></li>
+              <li><p>Kies een vaste map op je computer waar je het bestand wilt bewaren, bijvoorbeeld een Teams- of netwerkmap.</p></li>
               <li><p>Geef het bestand een herkenbare naam, bijvoorbeeld <strong>teamdata.json</strong>, en klik op Opslaan.</p></li>
               <li><p>De toolkit is nu klaar voor gebruik. In de navigatiebalk zie je rechts het bestandsknopje staan.</p></li>
             </ol>
-            <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>Sla het databestand op <strong>dezelfde plek</strong> op als toolkit.html, bijv. in een Teams- of netwerkmap. Dan heb je alles bij elkaar en kun je makkelijk een backup maken van die hele map.</span></div>
+            <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>Bewaar het databestand en je backups in <strong>dezelfde map</strong>, bijv. in een Teams- of netwerkmap. Dan heb je alles bij elkaar en kun je makkelijk een backup maken van die hele map.</span></div>
           </div>
           <div class="hdl-card">
             <h3>Volgende keer opstarten: bestaand bestand koppelen</h3>
