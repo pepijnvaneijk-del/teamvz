@@ -210,6 +210,7 @@
   .btn-dark:hover { background: #1c1917; }
   .btn-dark.copied { background: #16a34a; }
   .btn-ghost { background: none; border: 1px solid #e2dcd5; color: #57534e; font-weight: 600; }
+  .btn-klein { font-size: 11px; text-transform: none; letter-spacing: 0; } /* kleine tekstknop in vensters */
   .btn-ghost:hover { background: #faf9f7; }
   .btn-outline {
     background: white; border: 1px solid #e2dcd5; color: #57534e;
@@ -1297,8 +1298,14 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.12';
+const TOOLKIT_VERSIE = '2026.10.13';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.13', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
+    '<strong>Wat is nieuw</strong> toont nu alle versies die je nog niet gezien had, niet alleen de laatste — zo mis je geen belangrijke wijziging',
+    '<strong>Bescherming tegen een oude versie:</strong> opent een oudere toolkit (bijv. een eerder gedownload bestand) een databestand dat al door een nieuwere versie is opgeslagen, dan krijg je een waarschuwing en wordt er niets in het bestand overschreven. Zo gaan er geen gegevens verloren',
+    'De downloaduitleg in de handleiding zegt nu dat je het bestand hernoemt naar <strong>toolkit.html</strong>; oudere versies van "Wat is nieuw" staan voortaan ook op de openbare GitHub-pagina',
+    'Opgelost: "Wat is nieuw" kon verstopt achter de handleiding openen',
+  ]},
   { versie: '2026.10.12', datum: 'oktober 2026', releasedatum: '27-10-2026', items: [
     'De rondleiding sluit af met de eerste stappen op een rij en een knop naar <strong>Aan de slag</strong> in de handleiding, zodat duidelijk is waar je begint',
   ]},
@@ -1392,105 +1399,6 @@ const TOOLKIT_CHANGELOG = [
     'Zaken → Afsluiten: het archief is nu ingedeeld in <strong>archiveerbundels</strong> — per afsluitdag één uitklapbaar blok met de zaken die tóén zijn afgesloten, inclusief het aantal en of het een CSV-batch of een losse afsluiting was. Je ziet dus niet alleen wannéér er is gearchiveerd, maar ook precies welke zaken. De nieuwste bundel staat open; de rest klap je uit wanneer je hem nodig hebt',
     'Nieuw zoekveld boven het archief: typ een zaakkenmerk of een naam van een rechter en je ziet direct in welke bundel — dus op welke dag — die zaak is afgesloten',
   ]},
-  { versie: '2026.07.21', datum: 'juli 2026', releasedatum: '20-07-2026', items: [
-    'Opgelost: de schrijfkast-grafiek op het startscherm kon hetzelfde weeknummer twee keer tonen als een week per ongeluk twee keer werd gearchiveerd (bijv. na het corrigeren en opnieuw versturen van een weekmail) — de grafiek dedupt nu op weeknummer, net als de grafiek op Werkvoorraad, en toont de meest recente waarde',
-  ]},
-  { versie: '2026.07.20', datum: 'juli 2026', releasedatum: '13-07-2026', items: [
-    'Ook het ⚠️ op het Team-tabblad volgt nu de ingestelde belastingmarge (zelfde criterium als de ranglijst en de rechterkeuzelijst) — elk scherm geeft daarmee hetzelfde oordeel over wie te hoog zit',
-    'Overlappende afwezigheidsperiodes (bijv. een cursus die in een vakantie valt) telden dubbel, waardoor de beschikbaarheid — en dus het eerlijke aandeel in de verdeling — te laag uitviel; overlappende dagen tellen nu één keer',
-  ]},
-  { versie: '2026.07.19', datum: 'juli 2026', releasedatum: '13-07-2026', items: [
-    'Het ⚠-symbool in de rechterkeuzelijst volgt nu exact de ingestelde belastingmarge: het staat alleen bij rechters die in de ranglijst rood kleuren (boven de marge), en weegt daarbij ook afwezigheid mee — voorheen gebruikte de keuzelijst een eigen, afwijkende berekening',
-    'De volgorde van de rechterkeuzelijst is nu identiek aan de ranglijst (meest achterlopend bovenaan, gewogen naar beschikbaarheid)',
-  ]},
-  { versie: '2026.07.18', datum: 'juli 2026', releasedatum: '13-07-2026', items: [
-    'Opgelost: een rechter met alleen kanton aangevinkt kon in de rechterkeuzelijst en het advies van de hándelsverdeling verschijnen (bovenaan, want nul handelspunten) — het advies gebruikt nu hetzelfde handel-filter als de ranglijst',
-    'Nieuw: puntenspecificatie in de ranglijst — klap een rechter uit en zie boven de zakenlijst precies waar de punten vandaan komen (enkelvoudig / MK-voorzitter incl. bonus / MK-lid), mét waarschuwing als er zaken zijn met een ontbrekende of ongeldige zwaarte: die tellen elk maar 1 punt en verklaren vaak "veel zaken, weinig punten"',
-    'Advies bij gelijke stand (bijv. nog geen zaken): de rechter met de meeste beschikbare eFTE wordt aanbevolen, niet meer de eerste uit de lijst',
-    'De inhoud verspringt niet meer bij het wisselen van onderdeel: alle onderdelen gebruiken nu dezelfde uitlijnbreedte en de browser reserveert vaste ruimte voor de scrollbalk',
-  ]},
-  { versie: '2026.07.17', datum: 'juli 2026', releasedatum: '12-07-2026', items: [
-    'Nieuw: 🏛 Kanton-module (optioneel, standaard uit) — aparte werklastverdeling voor kantonzaken met een eigen puntenbalans naast handel. Aanzetten via Werklastverdeling → Instellingen; de keuze wordt per databestand bewaard, dus collega\'s met een eigen databestand merken er niets van',
-    'Kantonzaken registreren met eigen zwaartes (eenvoudig / normaal / complex, gewichten instelbaar) en een gebied-schakelaar ⚖️ Handel | 🏛 Kanton op Verdelen en Inzicht',
-    'Aardzaken (bijv. arbeidsrecht, huurrecht): instelbare categorieën met per rechter vinkjes wie ze mag doen — de keuzelijst en het advies tonen alleen bevoegde rechters',
-    'Zittingspakketten (zoals de O&O-zitting): registreer wie de zitting had; die telt voor een instelbaar aantal punten mee in de kanton-balans. Pakket-types zelf toe te voegen',
-    'Eigen kanton-ranglijst gewogen naar kanton-eFTE (effectieve FTE × kanton-percentage uit de personeelskaart), met uitklapbare zaken en zittingen per rechter',
-    'Kantonzaak voor een handelsrechter (bijv. erfrecht, letselschade): vink "🏛 Afkomstig uit kanton" aan bij het registreren als handelszaak — telt mee in de handel-balans, met herkenbaar herkomstlabel',
-    'Dashboard-widget "Handel & kanton per rechter": beide balansen naast elkaar in één oogopslag',
-  ]},
-  { versie: '2026.07.16', datum: 'juli 2026', releasedatum: '06-07-2026', items: [
-    'Verdelen: onder de rechterkeuze staat nu waaróm die rechter wordt aanbevolen (bijv. "loopt 3,2 pt achter op de evenredige verdeling") — de ranglijst erbij pakken hoeft niet meer',
-    'Waarschuwing bij een openstaande verdeelweek: is een gestarte verdeling niet afgerond terwijl de kalenderweek al verder is, dan zie je dat op het startscherm én bovenaan Inzicht (geen melding als er simpelweg niets gestart is)',
-    'Herinnering voor de uitstroomronde: is de laatste CSV-batch ruim 5 weken geleden, dan verschijnt een zacht hintje op het startscherm en Inzicht',
-    'Ranglijst: zaken direct in de uitklaprij bewerken — ✏️ opent nu ter plekke zwaarte wijzigen en ✓ afsluiten (volledig bewerken kan nog steeds); de uitgeklapte rechters blijven bovendien openstaan na elke wijziging of registratie',
-  ]},
-  { versie: '2026.07.15', datum: 'juli 2026', releasedatum: '06-07-2026', items: [
-    'Zaken → Afsluiten: elke afsluiting wordt nu geregistreerd met datum — het nieuwe kader "Archiveermomenten" toont per datum hoeveel zaken zijn afgesloten en of dat via een CSV-batch of los gebeurde (handig bij maandelijkse uitstroomverwerking)',
-  ]},
-  { versie: '2026.07.14', datum: 'juli 2026', releasedatum: '05-07-2026', items: [
-    'Weekpost: het emoji-aanbod is flink uitgebreid — de "meer"-knop opent nu een scrollbare kiezer met ruim 700 emoji in elf categorieën (smileys, gebaren, harten, feest, dieren & natuur, eten & drinken, sport, reizen, kantoor, symbolen), vergelijkbaar met WhatsApp',
-  ]},
-  { versie: '2026.07.13', datum: 'juli 2026', releasedatum: '05-07-2026', items: [
-    'Weekpost: linkjes naar websites direct in de mail — selecteer tekst in een tekstveld, klik op de nieuwe 🔗-knop in het zijpaneel en vul het webadres in; in de preview en de verstuurde mail wordt dat een klikbaar linkje (achteraf plakken in het .eml-bestand is niet meer nodig)',
-    'Weekpost: losse webadressen in de tekst (zoals www.rechtspraak.nl) worden automatisch klikbaar in de mail',
-  ]},
-  { versie: '2026.07.12', datum: 'juli 2026', releasedatum: '03-07-2026', items: [
-    'Rustiger eerste kennismaking, met het oog op delen met collega’s: het startscherm voor de bestandskeuze legt nu in gewone taal uit wat er gebeurt en zet "Nieuw databestand aanmaken" bovenaan als aanbevolen keuze bij eerste gebruik',
-    'Bij een geheel verse start verschijnt de "Wat is er nieuw?"-popup niet meer (voor een nieuwe gebruiker is alles nieuw) en blijft het backup-bolletje uit zolang er nog niets te verliezen valt',
-    'Het startscherm toont bij een lege toolkit alleen nog de welkomstroute — het raster met lege widgets verschijnt zodra er gegevens zijn',
-    'Werklastverdeling → Inzicht: de invoer om met terugwerkende kracht een week toe te voegen staat nu achter een knopje "+ Eerdere week toevoegen" (die leek onbedoeld een verplicht formulier) en het voorbeeldweeknummer is nu het huidige weeknummer',
-    'Kleine verduidelijkingen: navigatieknop heet nu Overzicht (zoals de paginatitel), "Heel team naar WV" heet voluit "Heel team naar werklastverdeling", de lege overleggen-pagina geeft voorbeelden van overlegtypen, en dubbele titel in de "Wat is er nieuw?"-popup verwijderd',
-  ]},
-  { versie: '2026.07.11', datum: 'juli 2026', releasedatum: '03-07-2026', items: [
-    'Twee nieuwe widgets op het startscherm: 🏖 Afwezigheden (wie is nu afwezig en wie de komende 4 weken — klik om naar Team te gaan) en ☑️ Taken — deadlines (open taken die verlopen zijn, vandaag aflopen of binnen 7 dagen — klik om naar de takenlijst te gaan)',
-  ]},
-  { versie: '2026.07.10', datum: 'juli 2026', releasedatum: '03-07-2026', items: [
-    'Zaken met een ontbrekende of ongeldige zwaarte zijn nu direct herkenbaar aan een geel "?"-label in de zakenlijsten — zulke zaken tellen wel mee in de punten maar ontbreken in de B/C/D-telling; met ✏️ stel je de zwaarte alsnog in',
-    'Weeknummers worden nu overal gecontroleerd (1 t/m 53) — bij de weekpost krijg je een waarschuwing vóór het versturen, bij de werkvoorraad en de verdeelhistorie kan geen ongeldig weeknummer meer worden opgeslagen',
-    'De backup-herinnering is instelbaar: bepaal zelf na hoeveel dagen het bolletje oranje (herinnering) en rood (dringend) wordt — instellen via het bestandsscherm (📁 in de navigatiebalk)',
-    'Het dashboard op het startscherm kan nu worden afgedrukt of als PDF bewaard via de nieuwe knop 🖨 Afdrukken',
-  ]},
-  { versie: '2026.07.9', datum: 'juli 2026', releasedatum: '03-07-2026', items: [
-    'Datums kloppen nu ook ’s nachts: de toolkit gebruikte achter de schermen de wereldklok (UTC), waardoor vóór één à twee uur ’s nachts "vandaag" nog gisteren was — taken met een deadline van vandaag kleurden dan onterecht rood',
-    'Gegevens uit oude reservekopieën laden weer zonder foutmelding: rechters uit een backup van vóór de vrijstellingen-functie lieten het teamoverzicht vastlopen',
-    'Backup herstellen zet nu óók de gegevens van Overleggen & Taken terug (die bleven eerder onbedoeld buiten het herstel)',
-    'Als de browseropslag vol raakt, crasht opslaan niet meer en wordt het gekoppelde bestand gewoon bijgewerkt; je krijgt daarvan eenmalig een melding',
-    'Werklastverdeling: in het overzicht toont de kolom B / C / D nu een 0 in plaats van een streepje, consistent met de totaalregel',
-    'Diverse kleine weergavefouten opgelost: geen "NaN" meer bij een ontbrekende FTE-waarde en geen "undefined" meer bij een neventaak waarvan de categorie is verwijderd',
-    'Onderhoud: dubbele hulproutines (Excel-export, downloads, afdrukvensters, datumopmaak, HTML-beveiliging en filters) zijn samengevoegd tot één centrale versie per routine (geen zichtbare wijziging)',
-  ]},
-  { versie: '2026.07.8', datum: 'juli 2026', releasedatum: '02-07-2026', items: [
-    'Eigen pictogram (weegschaal) voor het browsertabblad en bladwijzers, in plaats van het standaard wereldbol-icoon',
-  ]},
-  { versie: '2026.07.7', datum: 'juli 2026', releasedatum: '01-07-2026', items: [
-    'Evenredige verdeling: knop "⬍ Alles uitklappen/inklappen" om in één keer alle rechters open of dicht te klappen',
-    'Zaken → Actieve zaken: nieuwe knop "⬇ Exporteer zakenlijst" (Excel) met kenmerk, zwaarte, type, betrokken rechters, punten, datum en notitie',
-    'De personeelskaart-popup en de "Wat is er nieuw?"-popup sluiten nu ook met de Escape-toets',
-  ]},
-  { versie: '2026.07.6', datum: 'juli 2026', releasedatum: '01-07-2026', items: [
-    'Getallen worden nu overal met een Nederlandse komma weergegeven (bijv. 1,5 en −0,10) in plaats van een punt — in de zaken, personeelskaart, snapshots en exports. De grafieken blijven correct getekend',
-  ]},
-  { versie: '2026.07.5', datum: 'juli 2026', releasedatum: '01-07-2026', items: [
-    'Ingebouwde handleiding (📖 Handleiding) volledig bijgewerkt naar de nieuwe indeling — Inzicht / Verdelen / Zaken / Team / Instellingen — inclusief uitleg over uitklappen per rechter, de klikbare personeelskaart, rolnummer-herkenning bij import en het onderscheid "al actief / in archief"',
-    'Verouderde verwijzingen in meldingen bijgewerkt (Team i.p.v. Rechters, Afsluiten i.p.v. Archief)',
-    'Inzicht toont nu een duidelijke uitleg zolang er nog te weinig gegevens zijn voor een evenredige verdeling, in plaats van een leeg scherm',
-  ]},
-  { versie: '2026.07.4', datum: 'juli 2026', releasedatum: '01-07-2026', items: [
-    'Overleggen (Rechters): het contextveld groeit nu automatisch mee met de hoeveelheid tekst — geen vaste hoogte of scrollbalkje meer',
-    'Personeelskaart: de detailkaart van een rechter toont nu ook de context &amp; open bespreekpunten uit Overleggen, met een knop "🗓 Openen in Overleggen" om er direct naartoe te springen',
-  ]},
-  { versie: '2026.07.3', datum: 'juli 2026', releasedatum: '01-07-2026', items: [
-    'Inzicht opgeschoond: de losse "teamtotaal"-kaart en de aparte "Verdeling per rechter"-tabel zijn weg — die informatie zit nu in de evenredige verdeling zelf (uitklappen per rechter). Snapshot opslaan, exporteren en afdrukken zijn verplaatst naar de snapshots-kaart; exporteren/afdrukken van de verdeling per rechter blijft gewoon werken',
-    'Onderhoud: dode code opgeruimd en het live advies wordt nu ook bij het openen van Verdelen ververst',
-  ]},
-  { versie: '2026.07.2', datum: 'juli 2026', releasedatum: '01-07-2026', items: [
-    'Inzicht & Verdelen: klik in de "Evenredige verdeling" op een rechter om zijn/haar actieve zaken uit te klappen (gesorteerd op kenmerk, met rol en punten). Met het ✏️-knopje spring je direct naar die zaak in bewerkmodus — zwaarte aanpassen, omzetten naar MK of leden toevoegen',
-  ]},
-  { versie: '2026.07.1', datum: 'juli 2026', releasedatum: '01-07-2026', items: [
-    'Werklastverdeling opnieuw ingedeeld naar je werkstroom, met een nieuw startscherm. De tabbladen zijn nu: 📊 Inzicht (startscherm — de evenredige verdeling, de verdeling per rechter, het verloop per week en de snapshots/trend bij elkaar), ➕ Verdelen (de wekelijkse ritus met live advies), 📋 Zaken (actieve zaken, afsluiten/uitstroom en importeren/instroom bij elkaar), 👥 Team (rechters, eFTE en afwezigheid) en ⚙️ Instellingen',
-    'De bulk-import staat niet meer weggestopt in Instellingen, maar logisch bij Zaken (samen met het afsluiten van zaken)',
-    'Het advies "Evenredige verdeling" is nu zowel op het Inzicht-startscherm als tijdens het verdelen zichtbaar',
-  ]},
 ];
 
 function uHandleidingOpen(sectie) {
@@ -1537,16 +1445,30 @@ function uVersieCheck() {
   }
 }
 
+// Vergelijkt versienummers 'JJJJ.MM.n' numeriek: >0 als a nieuwer is dan b, NaN als er
+// één onleesbaar is.
+function uVersieVergelijk(a, b) {
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  if (pa.length !== 3 || pb.length !== 3 || [...pa, ...pb].some(isNaN)) return NaN;
+  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  return 0;
+}
+
 function uVersieRenderModal() {
   const el = document.getElementById('toolkit-versie-inhoud');
   if (!el) return;
-  const latest = TOOLKIT_CHANGELOG[0];
-  const ouder  = TOOLKIT_CHANGELOG.slice(1);
+  // Alle versies die nieuwer zijn dan de laatst geziene (minstens de nieuwste), zodat een
+  // belangrijke wijziging niet wegvalt achter een kleinere die later kwam.
+  const gezien = localStorage.getItem('teamvz_versie_gezien');
+  let nieuw = TOOLKIT_CHANGELOG.filter(v => uVersieVergelijk(v.versie, gezien) > 0);
+  if (!nieuw.length) nieuw = [TOOLKIT_CHANGELOG[0]];
+  const ouder = TOOLKIT_CHANGELOG.slice(nieuw.length);
   el.innerHTML = `
-    <div style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;margin-bottom:10px;">v${wvEsc(TOOLKIT_VERSIE)} · ${wvEsc(latest.datum)}</div>
+    ${nieuw.map(v => `
+    <div style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;margin-bottom:6px;">v${wvEsc(v.versie)} · ${wvEsc(v.datum)}</div>
     <ul style="margin:0 0 16px 0;padding-left:20px;font-family:Arial,sans-serif;font-size:13px;color:#57534e;line-height:1.75;">
-      ${latest.items.map(i=>`<li>${i}</li>`).join('')}
-    </ul>
+      ${v.items.map(i=>`<li>${i}</li>`).join('')}
+    </ul>`).join('')}
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <button onclick="uVersieToggleOud(this)" style="background:none;border:none;font-family:Arial,sans-serif;font-size:12px;color:#78716c;cursor:pointer;padding:0;">Alle versies ▸</button>
       <button class="btn btn-primary" onclick="uVersieSluit()">Sluiten</button>
@@ -1559,7 +1481,7 @@ function uVersieRenderModal() {
             ${v.items.map(i=>`<li>${i}</li>`).join('')}
           </ul>
         </div>`).join('')}
-      <div style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;">Oudere versies (vóór juli 2026) staan in CHANGELOG.md op GitHub.</div>
+      <div style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;">Oudere versies (vóór augustus 2026) staan in CHANGELOG.md op github.com/pepijnvaneijk-del/teamvz.</div>
     </div>`;
 }
 
@@ -7495,6 +7417,7 @@ let wvVerdelingWeek   = null;
 // Zie docs/superpowers/specs/2026-07-06-kanton-werklastverdeling-design.md
 let wvKantonActief     = false;
 let wpModuleActief     = true;  // weekpost-module (⚙ Onderdelen); standaard aan
+let _dataNieuwereVersie = null; // versie uit het databestand als die nieuwer is dan deze toolkit
 let wvKantonGewichten  = { eenvoudig: 1.0, normaal: 1.5, complex: 2.0 };
 let wvKantonCategorieen = []; // aardzaken: {id, naam} — alleen bevoegde rechters mogen deze zaken
 let wvPakketTypes      = []; // zittingspakketten: {id, naam, punten}
@@ -7601,6 +7524,10 @@ function setFileStatus(state, naam) {
   } else if (state === 'fout') {
     txt.textContent = '📁 Fout bij opslaan';
     el.className = 'app-nav-status status-err';
+  } else if (state === 'nieuwer') {
+    txt.textContent = '📁 Niet opgeslagen: nieuwere versie';
+    el.className = 'app-nav-status status-err';
+    el.title = 'Het databestand komt van een nieuwere toolkit; open de toolkit via het webadres.';
   } else if (state === 'browser') {
     txt.textContent = '📁 Browser (tijdelijk)';
     el.className = 'app-nav-status status-none';
@@ -7619,6 +7546,7 @@ function setFileStatus(state, naam) {
 // Let op: de veldnamen zijn het JSON-dataschema en mogen NIET wijzigen.
 function stateSerialize() {
   return {
+    toolkitVersie:      TOOLKIT_VERSIE,
     rechters:           wvRechters,
     zaken:              wvZaken,
     snapshots:          wvSnapshots,
@@ -7660,8 +7588,17 @@ function stateApply(data) {
   wvKantonActief=false; wvKantonGewichten={eenvoudig:1.0,normaal:1.5,complex:2.0};
   wvKantonCategorieen=[]; wvPakketTypes=[]; wvPakketten=[];
   wpModuleActief=true;
+  _dataNieuwereVersie = null;
 
   if (!data) { uModulesToepassen(); return; }
+  // Opgeslagen door een nieuwere toolkit (bijv. de webversie, terwijl dit een oude download
+  // is)? Dan niet terugschrijven: deze versie kent niet alle velden en zou ze wissen.
+  if (data.toolkitVersie && uVersieVergelijk(data.toolkitVersie, TOOLKIT_VERSIE) > 0) {
+    _dataNieuwereVersie = String(data.toolkitVersie);
+    uMelding('Dit databestand is opgeslagen met een <strong>nieuwere versie</strong> van de toolkit (v' + wvEsc(_dataNieuwereVersie) +
+      ') dan deze (v' + wvEsc(TOOLKIT_VERSIE) + '). Om te voorkomen dat er gegevens verloren gaan, worden wijzigingen <strong>niet</strong> in het bestand opgeslagen. ' +
+      'Open de toolkit via <strong>pepijnvaneijk-del.github.io/teamvz</strong> of download de nieuwste versie.', 'fout');
+  }
   if (Array.isArray(data.rechters))           wvRechters          = data.rechters;
   // Migratie: legacy 'afwezig' → 'afwezigHandmatig'; ontbrekende afwezigPeriodes
   // en vrijstellingen (backups van vóór die functies) krijgen een lege lijst.
@@ -7704,6 +7641,7 @@ function _fileBouwJson() {
 
 async function fileSave() {
   if (!wvFileHandle || _sessionGeblokkeerd) return;
+  if (_dataNieuwereVersie) { setFileStatus('nieuwer', ''); return; }
   // Schrijfslot: als er al een write loopt, markeer als wachtend en stop
   if (_fileSaveLock) { _fileSavePending = true; return; }
   _fileSaveLock = true;
@@ -7783,7 +7721,7 @@ function showFileOverlay() {
       <p class="file-overlay-prev">Verbonden met <strong>${wvEsc(wvFileHandle.name)}</strong></p>
       ${logRegel}
       <button class="btn btn-primary btn-block" style="margin-top:4px;" onclick="fileDownloadBackup()">💾 Backup downloaden</button>
-      <button class="btn btn-ghost btn-block" style="margin-top:4px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="fileHerstelBackup()">↩ Herstellen van handmatige backup…</button>
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:4px;" onclick="fileHerstelBackup()">↩ Herstellen van handmatige backup…</button>
       <p style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;margin:4px 0 0;">💡 Tip: sla backups op in dezelfde map als je databestand.</p>
       <p style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;margin:6px 0 0;">${(()=>{const d=backupDagenGeleden();return d===null?'⚠️ Nog geen backup gemaakt.':d===0?'✓ Laatste backup: vandaag.':d===1?'Laatste backup: gisteren.':`${d>uBackupDrempels.waarschuw?'⚠️ ':''}Laatste backup: ${d} dagen geleden.`;})()}</p>
       <div style="font-family:Arial,sans-serif;font-size:11px;color:#78716c;margin:6px 0 12px;display:flex;align-items:center;gap:5px;justify-content:center;flex-wrap:wrap;">
@@ -7801,7 +7739,7 @@ function showFileOverlay() {
       <button class="btn btn-ghost btn-block" style="margin-top:6px;" onclick="fileCreateNew()">✨ Nieuw bestand aanmaken</button>
       <div style="margin:16px 0;border-top:1px solid #e2dcd5;"></div>
       <button class="btn btn-danger btn-block" style="font-size:11px;" onclick="fileOntkoppelen()">Bestand ontkoppelen</button>
-      <button class="btn btn-ghost btn-block" style="margin-top:8px;font-size:10px;text-transform:none;letter-spacing:0;" onclick="hideFileOverlay()">Annuleren</button>`;
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:8px;font-size:10px;" onclick="hideFileOverlay()">Annuleren</button>`;
     autoBackupRenderLijst();
     return;
   }
@@ -7814,9 +7752,9 @@ function showFileOverlay() {
       <div style="margin:16px 0;border-top:1px solid #e2dcd5;"></div>
       <button class="btn btn-ghost btn-block" style="font-size:11px;" onclick="fileOpenExisting()">Ander bestand kiezen</button>
       <button class="btn btn-ghost btn-block" style="margin-top:6px;font-size:11px;" onclick="fileCreateNew()">Nieuw bestand aanmaken</button>
-      <button class="btn btn-ghost btn-block" style="margin-top:6px;font-size:10px;text-transform:none;letter-spacing:0;" onclick="fileSkip()">Zonder bestand doorgaan</button>
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:6px;font-size:10px;" onclick="fileSkip()">Zonder bestand doorgaan</button>
       <div style="margin:12px 0;border-top:1px solid #e2dcd5;"></div>
-      <button class="btn btn-ghost btn-block" style="margin-top:4px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="uHandleidingOpen()">📖 Gebruikshandleiding raadplegen</button>`;
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:4px;" onclick="uHandleidingOpen()">📖 Gebruikshandleiding raadplegen</button>`;
   } else {
     box.innerHTML = `
       <div class="file-overlay-icon">📁</div>
@@ -7826,10 +7764,10 @@ function showFileOverlay() {
       <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:4px 0 10px;">Gebruik je de toolkit voor het eerst? Kies dan deze.</p>
       <button class="btn btn-dark btn-block" onclick="fileOpenExisting()">📂 Bestaand databestand openen</button>
       <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:4px 0 10px;">Als je al eerder met de toolkit hebt gewerkt.</p>
-      <button class="btn btn-ghost btn-block" style="margin-top:2px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="fileSkip()">Zonder bestand doorgaan (tijdelijk, in de browser)</button>
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:2px;" onclick="fileSkip()">Zonder bestand doorgaan (tijdelijk, in de browser)</button>
       <div style="margin:16px 0;border-top:1px solid #e2dcd5;"></div>
       <p style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:0 0 8px;">💡 Zet het databestand op een vaste plek, bijv. in je Teams- of netwerkmap, en bewaar je backups in dezelfde map.</p>
-      <button class="btn btn-ghost btn-block" style="font-size:11px;text-transform:none;letter-spacing:0;" onclick="uHandleidingOpen()">📖 Gebruikshandleiding raadplegen</button>`;
+      <button class="btn btn-ghost btn-block btn-klein" onclick="uHandleidingOpen()">📖 Gebruikshandleiding raadplegen</button>`;
   }
 }
 
@@ -7950,7 +7888,7 @@ function welkomRender() {
   const klein = 'font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin:4px 0 10px;';
   const bolletjes = '<div style="display:flex;justify-content:center;gap:6px;margin-bottom:16px;">' +
     [0,1,2,3,4].map(i => `<span style="width:8px;height:8px;border-radius:50%;background:${i===st?'#c2410c':i<st?'#fdba74':'#e2dcd5'};"></span>`).join('') + '</div>';
-  const terug = `<button class="btn btn-ghost btn-block" style="margin-top:8px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomNaar(${st-1})">← Terug</button>`;
+  const terug = `<button class="btn btn-ghost btn-block btn-klein" style="margin-top:8px;" onclick="welkomNaar(${st-1})">← Terug</button>`;
   const verder = (stap, tekst='Volgende →') => `<button class="btn btn-primary btn-block" onclick="welkomNaar(${stap})">${tekst}</button>`;
   let html = '';
   if (st === 0) {
@@ -7958,7 +7896,7 @@ function welkomRender() {
       <div class="file-overlay-title">Welkom bij de Teamvoorzitter Toolkit</div>
       <p class="file-overlay-desc">Hiermee houd je als teamvoorzitter alles op één plek bij: de werklastverdeling van zaken, de personeelskaarten van je team, de weekpost, de werkvoorraad en overleggen &amp; taken.<br><br>🔒 Alles blijft op je eigen computer; er gaat niets naar internet.<br><br>In een paar korte stappen is de toolkit klaar voor gebruik.</p>
       ${verder(1, 'Start →')}
-      <button class="btn btn-ghost btn-block" style="margin-top:10px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomOverslaan()">Overslaan — ik heb de toolkit al eerder gebruikt</button>`;
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:10px;" onclick="welkomOverslaan()">Overslaan — ik heb de toolkit al eerder gebruikt</button>`;
   } else if (st === 1) {
     let keuze;
     if (wvFileHandle) {
@@ -7972,7 +7910,7 @@ function welkomRender() {
       <p style="${klein}">Gebruik je de toolkit voor het eerst? Kies dan deze.</p>
       <button class="btn btn-dark btn-block" onclick="fileOpenExisting()">📂 Ik heb al een databestand</button>
       <p style="${klein}">Als je al eerder met de toolkit hebt gewerkt.</p>
-      <button class="btn btn-ghost btn-block" style="margin-top:2px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomZonderBestand()">Later (tijdelijk in de browser bewaren)</button>`;
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:2px;" onclick="welkomZonderBestand()">Later (tijdelijk in de browser bewaren)</button>`;
     }
     html = `<div class="file-overlay-icon">📁</div>
       <div class="file-overlay-title">Stap 1 · Waar bewaar je je gegevens?</div>
@@ -8005,7 +7943,7 @@ function welkomRender() {
       </ol>
       <button class="btn btn-primary btn-block" onclick="welkomKlaar('pk')">👥 Begin met de Personeelskaart</button>
       <button class="btn btn-dark btn-block" style="margin-top:8px;" onclick="welkomKlaar('hdl')">📖 Lees eerst: Aan de slag</button>
-      <button class="btn btn-ghost btn-block" style="margin-top:8px;font-size:11px;text-transform:none;letter-spacing:0;" onclick="welkomKlaar(false)">Naar het startscherm</button>
+      <button class="btn btn-ghost btn-block btn-klein" style="margin-top:8px;" onclick="welkomKlaar(false)">Naar het startscherm</button>
       <p style="${klein}margin-top:12px;">Deze rondleiding kun je later opnieuw bekijken via de 📖 Handleiding.</p>
       ${terug}`;
   }
@@ -10412,14 +10350,14 @@ document.addEventListener('keydown', function(e) {
           <div class="hdl-section-header"><span class="hdl-section-icon">🚀</span><span class="hdl-section-title">Aan de slag</span></div>
           <div class="hdl-card">
             <h3>De toolkit openen</h3>
-            <p>Open de toolkit via het webadres <a href="https://pepijnvaneijk-del.github.io/teamvz/" target="_blank" rel="noopener"><strong>pepijnvaneijk-del.github.io/teamvz</strong></a>. Zet het adres bij je favorieten, dan heb je de toolkit met één klik open. Je krijgt zo altijd vanzelf de nieuwste versie; downloaden is niet meer nodig.</p>
+            <p>Open de toolkit via het webadres <a href="https://pepijnvaneijk-del.github.io/teamvz/" target="_blank" rel="noopener"><strong>pepijnvaneijk-del.github.io/teamvz</strong></a>. Zet het adres bij je favorieten, dan heb je de toolkit met één klik open. Je krijgt zo altijd vanzelf de nieuwste versie, zonder iets te downloaden.</p>
             <div class="hdl-tip"><span class="hdl-tip-icon">🔒</span><span>Je gegevens gaan <strong>niet</strong> naar internet. Ook via het webadres blijft alles op je eigen computer: in de browser en in je eigen databestand.</span></div>
             <p>Liever een los bestand? De toolkit is ook één HTML-bestand dat je op je computer kunt zetten en opent door erop te dubbelklikken in Windows Verkenner. Zo download je het:</p>
             <ol class="hdl-steps">
               <li><p>Ga naar <a href="https://github.com/pepijnvaneijk-del/teamvz" target="_blank" rel="noopener"><strong>github.com/pepijnvaneijk-del/teamvz</strong></a> (inloggen is niet nodig).</p></li>
               <li><p>Klik in de lijst op <strong>index.html</strong>.</p></li>
               <li><p>Klik rechtsboven op het pijltje omlaag (<strong>Download raw file</strong>). Het bestand komt in je map Downloads.</p></li>
-              <li><p>Zet het in een vaste map en geef het eventueel een duidelijke naam, bijvoorbeeld <strong>toolkit.html</strong>.</p></li>
+              <li><p>Het bestand heet nog <strong>index.html</strong>. Hernoem het naar <strong>toolkit.html</strong> (zo heet het verder ook in deze handleiding) en zet het in een vaste map.</p></li>
             </ol>
             <div class="hdl-warn"><span class="hdl-tip-icon">⚠️</span><span>Een gedownload bestand wordt <strong>niet vanzelf bijgewerkt</strong>; voor een nieuwe versie download je het opnieuw. Gebruik óf het webadres óf het bestand, niet afwisselend: ze hebben elk hun eigen browseropslag en kunnen elkaars wijzigingen in het databestand overschrijven. Wissel je toch, koppel je databestand dan één keer opnieuw.</span></div>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>De toolkit werkt het best in <strong>Microsoft Edge</strong> of Google Chrome. Internet Explorer werkt niet.</span></div>
@@ -10819,7 +10757,7 @@ document.addEventListener('keydown', function(e) {
 </div>
 
 <!-- VERSIE CHANGELOG OVERLAY -->
-<div id="toolkit-versie-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;align-items:center;justify-content:center;">
+<div id="toolkit-versie-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1060;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,0.22);max-width:520px;width:92vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
     <div style="background:#292524;color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-radius:14px 14px 0 0;">
       <div style="font-family:Georgia,serif;font-size:15px;font-weight:700;">Wat is er nieuw?</div>
