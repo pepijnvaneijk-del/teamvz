@@ -1226,7 +1226,7 @@
         <div class="grid2" style="margin-bottom:12px;">
           <div class="field">
             <label>Weeknummer</label>
-            <input type="number" id="tr-week" min="1" max="53" placeholder="bijv. 20" oninput="this.dataset.auto=''">
+            <input type="number" id="tr-week" min="1" max="53" placeholder="bijv. 20" oninput="this.dataset.auto='';trWeekGewijzigd()">
           </div>
           <div class="field">
             <label>Datum</label>
@@ -1298,8 +1298,17 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.18';
+const TOOLKIT_VERSIE = '2026.10.19';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.19', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
+    '<strong>Overleggen:</strong> Escape en ✕ annuleren een bewerking nu echt (de tekst werd toch opgeslagen); een taak naar beneden slepen komt op de juiste plek; klikken in het hernoem-vak klapt de kaart niet meer dicht; met <strong>＋ deadline</strong> raak je je getypte taak niet meer kwijt; besproken punten zijn te verwijderen; een verwijderd overlegtype is ongedaan te maken; een taak afvinken op het startscherm ook',
+    '<strong>Personeelskaart:</strong> het bewerkformulier, de totalen, de detailkaart, afdrukken en Excel rekenen nu ook met neventaken en de actuele waarde van vrijstellingscategorieën; een nieuw teamlid zonder naam blijft niet meer achter; een dubbele naam wordt gemeld; het vinkje "kan deelnemen aan een meervoudige kamer" werkt nu ook in de verdeling; een verwijderde vrijstellingscategorie blijft bij de teamleden staan met de laatste waarde',
+    '<strong>Weekpost:</strong> regelovergangen in Bijzonderheid, Wist je dat en de schrijfkast-oproep blijven behouden; links tussen &lt;…&gt; en mail-links werken; het onderwerp komt goed aan in Outlook; na archiveren rolt een vooruit voorbereide weekpost door naar de juiste week; een mislukte kopieeractie wordt gemeld',
+    '<strong>Importeren en afsluiten:</strong> een ; binnen aanhalingstekens verschuift geen kolommen meer; voetregels en plaatsnamen worden geen zaak; 31-02 wordt geweigerd; een lege zwaarte-kolom telt als B; "HA ZA 26-123" en "26-123" gelden als dezelfde zaak; twee CSV-batches op één dag zijn los van elkaar terug te draaien',
+    '<strong>Werkvoorraad:</strong> een handmatig datapunt is te verwijderen; de nieuwste correctie geldt (ook bij "Uit werkvoorraad" en in het jaarrapport); een week die al bestaat wordt pas na bevestiging vervangen',
+    '<strong>Verdeling:</strong> bewerken van een kantonzaak verplaatst die niet meer stilletjes naar een andere rechter; een zaak met ontbrekende zwaarte (geel "?") is te herstellen door hem te openen en op te slaan; een marge of gewicht van 0 wordt het minimum in plaats van de standaard; Extern telt niet mee in het MK-totaal; "Week afronden" telt ook zaken die al zijn afgesloten; de kop bovenaan ververst direct na het registreren',
+    'Kleinere reparaties: Escape sluit "Wat is nieuw" meteen; de tegel Afwezigheden volgt het vinkje; "laatste registratie" en de backup-herinnering rekenen in kalenderdagen; jaar en week 53 worden gecontroleerd bij een eerdere week; Excel maakt van een rolnummer als 26-7 geen datum meer; de takenteller op de knop Overleggen staat er direct na het opstarten',
+  ]},
   { versie: '2026.10.18', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     '<strong>Eerlijker evenredige verdeling.</strong> Elke openstaande zaak telt nu mee in de week waarin hij is toegedeeld, en de punten van die week worden verdeeld over wie er toen werkte. Daardoor zijn een aantal fouten verdwenen die de ranglijst scheeftrokken. Let op: waar afwezigheid, een nieuwe collega of een FTE-wijziging speelde, verschuift de ranglijst eenmalig (ook de snapshot-trend maakt in deze week een sprong)',
     'Een geplande afwezigheid verandert de stand niet meer (één vrije dag morgen gaf iemand vandaag ten onrechte +67%). In de ranglijst en bij het advies zie je alleen een hint, bijv. <em>"🏖 afwezig vanaf 9 nov (2 wk)"</em>',
@@ -1468,7 +1477,7 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     if (ovNoteerIsOpen()) { ovNoteerSluit(); return; }
     const hdl = document.getElementById('handleiding-overlay');
-    if (hdl && hdl.style.display !== 'none') { uHandleidingSluit(); return; }
+    if (hdl && getComputedStyle(hdl).display !== 'none') { uHandleidingSluit(); return; }
     const pkd = document.getElementById('pk-detail-overlay');
     if (pkd && pkd.style.display !== 'none') { pkSluitDetail(); return; }
     const ver = document.getElementById('toolkit-versie-overlay');
@@ -1799,7 +1808,7 @@ function _homeRender() {
   const metDatum = actZaken.filter(z=>z.datum).sort((a,b)=>b.datum.localeCompare(a.datum));
   let zaakTekst  = '—';
   if (metDatum[0]) {
-    const d = Math.floor((Date.now()-new Date(metDatum[0].datum))/86400000);
+    const d = Math.round((new Date(uDatumISO() + 'T12:00:00') - new Date(metDatum[0].datum + 'T12:00:00')) / 86400000);
     zaakTekst = d===0?'Vandaag':d===1?'Gisteren':`${d} dagen geleden`;
   }
   const wvHoofd = actZaken.length ? `${actZaken.length} zaken · ${wvTotPt.toFixed(1).replace('.',',')} Pt` : '—';
@@ -1854,7 +1863,7 @@ function _homeRender() {
   // Vergelijk met de laatste snapshot van een eerdere week: die van deze week loopt (via
   // wvAutoSnapshot) mee met de actuele stand en geeft dus altijd een verschil van 0.
   const _nu = new Date(), _nuWk = wpIsoWeek(_nu), _nuJr = wpIsoJaar(_nu);
-  const prev = wvSnapshots.find(sn => !(sn.week === _nuWk && (sn.jaar == null ? (sn.datum||'').slice(0,4) === String(_nuJr) : sn.jaar === _nuJr)));
+  const prev = wvSnapshots.find(sn => !(sn.week === _nuWk && (sn.jaar == null ? !!sn.datum && wpIsoJaar(new Date(sn.datum + 'T12:00:00')) === _nuJr : sn.jaar === _nuJr)));
   if (prev&&intensiteit!==null) {
     // Nieuwere snapshots bewaren de norm van de ranglijst; bij oudere de benadering punten/eFTE
     const prevInt=prev.norm!=null?prev.norm:(prev.totaalEffFTE>0?prev.totaalPunten/prev.totaalEffFTE:null);
@@ -1933,16 +1942,18 @@ function _homeRender() {
   const afwKort = s => { const d = new Date(s); return isNaN(d) ? s : d.toLocaleDateString('nl-NL', {day:'numeric', month:'short'}); };
   const afwItems = [];
   wvRechters.forEach(r => {
-    let heeftPeriode = false;
+    let heeftNu = false;
     (r.afwezigPeriodes || []).forEach(p => {
       if (!p.van || !p.tot) return;
       if (p.tot < afwVandaag || p.van > afwGrens) return;
-      heeftPeriode = true;
+      // Lopende periode die met het vinkje is uitgezet ("toch aanwezig"): niet tonen
+      if (p.van <= afwVandaag && r.afwezigHandmatig === false) return;
+      if (p.van <= afwVandaag) heeftNu = true;
       afwItems.push({ naam: r.naam, nu: p.van <= afwVandaag,
         tekst: p.van <= afwVandaag ? `t/m ${afwKort(p.tot)}` : `${afwKort(p.van)} – ${afwKort(p.tot)}`,
         label: p.label || '', sort: p.van });
     });
-    if (r.afwezigHandmatig === true && !heeftPeriode) {
+    if (r.afwezigHandmatig === true && !heeftNu) {
       afwItems.push({ naam: r.naam, nu: true, tekst: 'tot nader order', label: '', sort: '' });
     }
   });
@@ -1975,7 +1986,7 @@ function _homeRender() {
         `<input type="checkbox" title="Afvinken" aria-label="Taak afvinken" onclick="event.stopPropagation();homeVinkTaakAf('${t.id}')" onkeydown="event.stopPropagation()">` +
         `<span style="flex:1;color:#292524;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${wvEsc(t.tekst)}">${wvEsc(t.tekst)}</span>` +
         (label ? `<span style="color:#a8a29e;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${wvEsc(label)}</span>` : '') +
-        (t.deadline ? `<span style="color:${kleur};flex-shrink:0;">${afwKort(t.deadline)}</span>` : '') +
+        (t.deadline ? `<span style="color:${kleur};flex-shrink:0;">${wvEsc(afwKort(t.deadline))}</span>` : '') +
         '</div>';
     }).join('') +
       (tkOpen.length > 8 ? `<div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;">+ ${tkOpen.length - 8} meer…</div>` : '') +
@@ -2046,6 +2057,7 @@ function showView(name, btn) {
 }
 
 function _showView(name, btn) {
+  if (name !== 'personeelskaart' && typeof pkRuimNaamlozeOp === 'function') pkRuimNaamlozeOp();
   if (typeof ovAutoSaveEditState === 'function') ovAutoSaveEditState();
   ovUpdateNavBadge();
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -2127,7 +2139,7 @@ function updateAppHeaderRight(name) {
   } else if (name === 'werklastverdeling') {
     // Header toont de totale werklast; met de kanton-module aan tellen kantonzaken
     // en -zittingen mee zodat aantal en punten bij elkaar blijven passen.
-    const nZ = wvZaken.filter(z=>!z.afgehandeld).length;
+    const nZ = wvZaken.filter(z=>!z.afgehandeld && (wvKantonActief || !zaakIsKanton(z))).length;
     const totPt = wvTotaalHandelPunten() + (wvKantonActief
       ? wvRechters.filter(wvIsRechterRol).reduce((s,r)=>s+wvKantonPuntenVoor(r.id),0) : 0);
     const wvVal = nZ ? `${nZ} z · ${totPt.toFixed(1).replace('.',',')} pt` : '0 zaken';
@@ -2194,7 +2206,7 @@ function wpUpdateSchrijfkast() {
   const formDelta = document.getElementById('wp-sk-totaal-delta');
   formDelta.textContent = `(${td.plain} t.o.v. vorige week)`;
   formDelta.className = 'sk-totaal-delta ' + (totaal < totaalPrev ? 'down' : totaal > totaalPrev ? 'up' : 'flat');
-  document.getElementById('wp-p-sk-oproep').innerHTML = wpRich(wpVal('wp-sk-oproep'));
+  document.getElementById('wp-p-sk-oproep').innerHTML = wpRichBr(wpVal('wp-sk-oproep'));
 }
 
 function wpLinesToParagraphs(srcId, dstId) {
@@ -2217,20 +2229,25 @@ const WP_LINK_RE = /\[([^\]\n]+)\]\(([^\s()]+)\)/g;
 function wpRich(t) {
   const klaar = [];
   const anker = (url, tekst) => {
-    const href = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+    // Webadres zonder http(s) krijgt https://; mail- en telefoonlinks blijven zoals ze zijn
+    const href = /^(https?:\/\/|mailto:|tel:)/i.test(url) ? url : 'https://' + url;
     klaar.push(`<a href="${href}" target="_blank" rel="noopener" style="color:#0563c1;text-decoration:underline;">${tekst}</a>`);
     return `\u0000${klaar.length - 1}\u0000`;
   };
   let s = wpEsc(t);
   s = s.replace(WP_LINK_RE, (m, tekst, url) => anker(url, tekst));
   // Losse webadressen klikbaar maken; leestekens aan het eind horen bij de zin
-  s = s.replace(/(?:https?:\/\/|www\.)[^\s\u0000]+/gi, m => {
+  // Een adres stopt bij < > " ' (bijv. Outlook-vorm <https://...>)
+  s = s.replace(/(?:https?:\/\/|www\.)(?:(?!&lt;|&gt;|&quot;|&#39;)[^\s\u0000'])+/gi, m => {
     const kaal = m.replace(/(?:&quot;|&amp;|[.,;:!?…)\]}])+$/, '');
     if (!kaal || !kaal.includes('.')) return m;
     return anker(kaal, kaal) + m.slice(kaal.length);
   });
   return s.replace(/\u0000(\d+)\u0000/g, (m, i) => klaar[+i]);
 }
+
+// Zoals wpRich, maar met behoud van regelovergangen (meerregelige velden)
+function wpRichBr(t) { return wpRich(t).replace(/\n/g, '<br>'); }
 
 // Voor de platte-tekstversie van de mail: [tekst](url) → tekst (url)
 function wpPlain(t) { return String(t || '').replace(WP_LINK_RE, '$1 ($2)'); }
@@ -2264,7 +2281,7 @@ function wpGetState() {
   return {
     naam:          document.getElementById('wp-naam')?.value          || '',
     aan:           document.getElementById('wp-aan')?.value           || '',
-    weeknummer:    document.getElementById('wp-weeknummer')?.value    || '20',
+    weeknummer:    document.getElementById('wp-weeknummer')?.value    || '', // leeg → bij laden de huidige week
     aanhef:        document.getElementById('wp-aanhef')?.value        || '',
     afsluiting:    document.getElementById('wp-afsluiting')?.value    || '',
     skHuidig:      Object.fromEntries(wpSkKeys.map(k => [k, wpSkNum(`wp-sk-${k}`)])),
@@ -2360,10 +2377,15 @@ function wpArchiveerWeekmail() {
 
 // De week ná de verzonden week: meestal volgende week; archiveer je pas een week later, dan deze week.
 function wpVolgendeWeekNa(verzondenWeek) {
+  // De week ná de verzonden week, maar nooit eerder dan de huidige week (een vooruit
+  // voorbereide weekpost voor volgende week rolt dus door naar de week daarna)
   const nu = new Date();
-  if (parseInt(verzondenWeek) !== wpIsoWeek(nu)) return wpIsoWeek(nu);
-  const volgende = new Date(); volgende.setDate(volgende.getDate() + 7);
-  return wpIsoWeek(volgende);
+  const wk = parseInt(verzondenWeek);
+  const jaar = wpArchiefJaar({ week: wk, datum: uDatumISO() });
+  const ma = wvDatumVanIsoWeek(jaar, wk);
+  if (!ma) return wpIsoWeek(nu);
+  const daarna = new Date(ma); daarna.setDate(daarna.getDate() + 7);
+  return daarna > nu ? wpIsoWeek(daarna) : wpIsoWeek(nu);
 }
 function wpDoorrollenNaVolgendeWeek(verzondenWeek) {
   const weekEl = document.getElementById('wp-weeknummer');
@@ -2420,7 +2442,7 @@ function wpUpdate() {
   document.getElementById('wp-p-afsluiting').textContent = wpAfsluiting();
   wpRenderBasis();
   wpRenderLint();
-  document.getElementById('wp-p-bijzonderheid').innerHTML = wpRich(wpVal('wp-bijzonderheid'));
+  document.getElementById('wp-p-bijzonderheid').innerHTML = wpRichBr(wpVal('wp-bijzonderheid'));
   wpUpdateSchrijfkast();
 
   const wpSectToggle = (sectId, hrId, vulling) => {
@@ -2446,7 +2468,7 @@ function wpUpdate() {
   if (weekend) wpLinesToParagraphs('wp-weekend', 'wp-p-weekend');
 
   wpSectToggle('wp-p-wistjedat-section', 'wp-p-wistjedat-hr', wjd);
-  if (wjd) document.getElementById('wp-p-wistjedat').innerHTML = wpRich(wjd);
+  if (wjd) document.getElementById('wp-p-wistjedat').innerHTML = wpRichBr(wjd);
   const dot = document.getElementById('wp-concept-dot');
   if (dot) dot.style.display = wpHeeftConcept() ? 'inline-block' : 'none';
   wpSaveDebounced();
@@ -2518,12 +2540,12 @@ function wpGetHtmlMail(d) {
   const H='font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:12pt;font-weight:bold;color:#c2410c;background-color:#ffffff;margin:0 0 8px 0;line-height:1.3;';
   const P='margin:0 0 8px 0;line-height:1.5;background-color:#ffffff;';
   const HR='<hr style="border:none;border-top:1px solid #d4cfc8;margin:12px 0;">';
-  const bijBlok    = bij     ? `<p style="${P}">${wpRich(bij)}</p>` : '';
+  const bijBlok    = bij     ? `<p style="${P}">${wpRichBr(bij)}</p>` : '';
   const mededBlok  = meded   ? `${HR}<p style="${H}">📣 Teamnieuws &amp; mededelingen</p>${wpParagraphsHtml(meded)}` : '';
   const wwBlok     = ww      ? `${HR}<p style="${H}">🙌 Wel en wee</p>${wpParagraphsHtml(ww)}` : '';
-  const oproepBlok = oproep  ? `<p style="margin:10px 0 0 0;font-style:italic;color:#57534e;line-height:1.5;background-color:#ffffff;">${wpRich(oproep)}</p>` : '';
+  const oproepBlok = oproep  ? `<p style="margin:10px 0 0 0;font-style:italic;color:#57534e;line-height:1.5;background-color:#ffffff;">${wpRichBr(oproep)}</p>` : '';
   const weekendBlok= weekend ? `${HR}<p style="${H}">🔭 Vooruitblik weekend</p>${wpParagraphsHtml(weekend)}` : '';
-  const wjdBlok    = wjd     ? `${HR}<p style="${H}">💡 Wist je dat...</p><p style="${P}">${wpRich(wjd)}</p><p style="margin:8px 0 0 0;font-style:italic;color:#a8a29e;font-size:10pt;line-height:1.5;background-color:#ffffff;">Heb jij ook zo'n weetje over jezelf? Stuur het op, dan kom jij volgende week in de spotlight.</p>` : '';
+  const wjdBlok    = wjd     ? `${HR}<p style="${H}">💡 Wist je dat...</p><p style="${P}">${wpRichBr(wjd)}</p><p style="margin:8px 0 0 0;font-style:italic;color:#a8a29e;font-size:10pt;line-height:1.5;background-color:#ffffff;">Heb jij ook zo'n weetje over jezelf? Stuur het op, dan kom jij volgende week in de spotlight.</p>` : '';
   return `<div style="font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:11pt;color:#1c1917;line-height:1.5;width:100%;max-width:640px;background-color:#ffffff;"><p style="margin:0;font-size:0;line-height:0;color:#ffffff;">&nbsp;</p><p style="font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:9pt;color:#78716c;margin:0 0 12px 0;background-color:#ffffff;">✉️ De Weekpost — week ${wpEsc(week)}</p><p style="${P}">${wpEsc(aanhef)}</p>${bijBlok}${mededBlok}${wwBlok}${HR}<p style="${H}">📂 Uit de schrijfkast</p>${skHtml}${oproepBlok}${weekendBlok}${wjdBlok}${HR}<p style="${P}">${wpEsc(afsluiting)}</p><p style="margin:0;font-weight:bold;background-color:#ffffff;">— ${wpEsc(naam)}</p></div>`;
 }
 
@@ -2533,7 +2555,8 @@ function wpGenerateEml() {
   const subject=`De Weekpost — Week ${week}`;
   const boundary='weekpost_'+Date.now();
   const htmlDoc=`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${html}</body></html>`;
-  const headers=['MIME-Version: 1.0','X-Unsent: 1',`Subject: ${subject}`];
+  // Onderwerp volgens de mailstandaard coderen (anders wordt bijv. het streepje "—" in Outlook "â€”")
+  const headers=['MIME-Version: 1.0','X-Unsent: 1',`Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`];
   if (aan) headers.push(`To: ${aan}`);
   headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
   return [...headers,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: 8bit','',text,'',`--${boundary}`,'Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: 8bit','',htmlDoc,'',`--${boundary}--`].join('\r\n');
@@ -2754,7 +2777,8 @@ async function wpCopyToClipboard() {
     tmp.style.position='fixed'; tmp.style.left='-9999px'; document.body.appendChild(tmp);
     const range=document.createRange(); range.selectNodeContents(tmp);
     const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-    document.execCommand('copy'); sel.removeAllRanges(); document.body.removeChild(tmp);
+    const gelukt = document.execCommand('copy'); sel.removeAllRanges(); document.body.removeChild(tmp);
+    if (!gelukt) throw new Error('de browser stond kopiëren niet toe');
     success();
   } catch(err) { fail(err); }
 }
@@ -2924,6 +2948,8 @@ function wvOpslaan() {
   lsZet('teamvz_kanton', JSON.stringify(_kantonState()));
   lsZet('teamvz_modules', JSON.stringify({ weekpost: wpModuleActief }));
   fileSave();
+  const actiefScherm = document.querySelector('.view.active')?.id?.replace('view-', '');
+  if (actiefScherm === 'werklastverdeling' && typeof updateAppHeaderRight === 'function') updateAppHeaderRight(actiefScherm);
 }
 
 function _kantonState() {
@@ -2982,7 +3008,8 @@ function uOpenPrintVenster(html) {
 function uHtmlSheet(titel, header, rijen) {
   const th = header.map(h=>`<th style="background:#292524;color:#fdf8f0;padding:6px 10px;font-family:Arial;font-size:11pt;">${h}</th>`).join('');
   // Celinhoud is altijd platte tekst (namen, notities): hier escapen, dan kan geen export het vergeten
-  const trs = rijen.map(r=>`<tr>${r.map(c=>`<td style="padding:5px 10px;font-family:Arial;font-size:10pt;">${wvEsc(c == null ? '' : String(c))}</td>`).join('')}</tr>`).join('');
+  const isRolnummer = c => /^\d{1,4}-\d{1,6}$/.test(String(c ?? '').trim());
+  const trs = rijen.map(r=>`<tr>${r.map(c=>`<td style="padding:5px 10px;font-family:Arial;font-size:10pt;${isRolnummer(c) ? "mso-number-format:'\\@';" : ''}">${wvEsc(c == null ? '' : String(c))}</td>`).join('')}</tr>`).join('');
   return `<h3 style="font-family:Arial;color:#292524;">${titel}</h3><table border="1" style="border-collapse:collapse;"><tr>${th}</tr>${trs}</table><br/>`;
 }
 // localStorage-write die niet crasht als de opslag vol is (QuotaExceededError):
@@ -3324,7 +3351,8 @@ function zaakBijdrageVoor(zaak, rid) {
 function wvZaakPunten(zaak) {
   const g = zaakGewichtVan(zaak);
   if (zaak.type !== 'MK') return g;
-  return g + wvMkVzBonus + g * [zaak.l1_id, zaak.l2_id].filter(Boolean).length;
+  // Alleen echte teamrechters tellen (niet "Extern"/leeg)
+  return (wvIsEchteRechterId(zaak.vz_id) ? g + wvMkVzBonus : 0) + g * [zaak.l1_id, zaak.l2_id].filter(wvIsEchteRechterId).length;
 }
 
 function zaakBetreftRechter(zaak, rid) {
@@ -3636,7 +3664,7 @@ function _wvRenderZaakSelectors() {
   } else {
     const r1 = wvAanbevolenRechter();
     const r2 = wvAanbevolenRechter(r1 ? [r1.id] : []);
-    const r3 = wvAanbevolenRechter(r1 && r2 ? [r1.id, r2.id] : []);
+    const r3 = r2 ? wvAanbevolenRechter([r1?.id, r2.id].filter(Boolean)) : null;
     el.innerHTML=`<div class="grid3" style="margin-bottom:2px;">
       <div class="field"><label>Voorzitter <span class="badge b-vz">+${wvMkVzBonus} pt</span></label><select id="wv-sel-vz">${wvRechterOpties(r1?.id, false, true, null, true)}</select></div>
       <div class="field"><label>Lid 1 <span style="color:#a8a29e;font-weight:normal;">(optioneel)</span></label><select id="wv-sel-l1">${wvRechterOpties(r2?.id, true, true, null, true)}</select></div>
@@ -3672,10 +3700,12 @@ function wvMagCategorie(r, catId) {
 
 function wvKantonRechterOpties(selId, catId) {
   const team = wvRechters
-    .filter(r => wvIsRechterRol(r) && wvIsKantonRechter(r) && (wvMagCategorie(r, catId) || r.id === selId))
+    // De huidige rechter blijft altijd kiesbaar (ook als die geen kantonrechter meer is),
+    // zodat bewerken de zaak nooit stilletjes naar iemand anders verplaatst
+    .filter(r => r.id === selId || (wvIsRechterRol(r) && wvIsKantonRechter(r) && wvMagCategorie(r, catId)))
     .sort((a, b) => a.naam.localeCompare(b.naam, 'nl'));
   if (!team.length) return '<option value="">— geen kantonrechters —</option>';
-  return team.map(r => `<option value="${r.id}"${r.id === selId ? ' selected' : ''}>${wvEsc(r.naam)}</option>`).join('');
+  return team.map(r => `<option value="${r.id}"${r.id === selId ? ' selected' : ''}>${wvEsc(r.naam)}${r.id === selId && !wvIsKantonRechter(r) ? ' (geen kantonrechter meer)' : ''}</option>`).join('');
 }
 
 function wvAanbevolenKantonRechter(catId, exclude = []) {
@@ -3829,7 +3859,10 @@ function wvEditZaak(zid) {
   wvOmzettenId  = null;
   wvEditingId   = zid;
   wvEditType    = z.type;
-  wvEditZwaarte = z.zwaarte;
+  // Ontbrekende/ongeldige zwaarte: het bewerkvak toont de eerste keuze, dus die ook
+  // aanhouden — anders blijft het gele "?" na opslaan gewoon staan
+  const geldig = zaakIsKanton(z) ? Object.keys(wvKantonGewichten) : ['B','C','D'];
+  wvEditZwaarte = geldig.includes(z.zwaarte) ? z.zwaarte : geldig[0];
   wvEditKenmerk = z.kenmerk;
   wvRenderZakenLijst();
 }
@@ -3952,7 +3985,7 @@ function _wvSlaEditOpDoen(zid, kenmerk) {
     Object.assign(zaak, {kenmerk, zwaarte, type:'E', rechter_id:rid, categorie:cat, notitie:not});
     uLog('zaak-bewerkt', { gebied: 'kanton' });
     wvEditingId = null; wvEditType = null; wvEditZwaarte = null; wvEditKenmerk = null;
-    wvOpslaan(); wvRenderZakenLijst(); wvRenderOverzicht(); wvRenderVerdeelRanglijst();
+    wvOpslaan(); wvRenderZakenLijst(); wvRenderOverzicht(); wvRenderVerdeelRanglijst(); wvRenderZaakSelectors(); wvRenderRechters();
     return;
   }
   if (type === 'E') {
@@ -4172,12 +4205,15 @@ function wvRenderZakenLijst() {
       const items=[];
       for (const z of actief) {
         if (z.type==='E') {
-          items.push({z, groepNaam:wvRechterNaam(z.rechter_id), highlightRid:null});
+          items.push({z, groepNaam:wvRechterNaam(z.rechter_id) || '(nog geen rechter)', highlightRid:null});
         } else {
           // Externe (niet-meetellende) slots krijgen geen eigen groep
+          const voor = items.length;
           if (wvIsEchteRechterId(z.vz_id)) items.push({z, groepNaam:wvRechterNaam(z.vz_id), highlightRid:z.vz_id});
           if (wvIsEchteRechterId(z.l1_id)) items.push({z, groepNaam:wvRechterNaam(z.l1_id), highlightRid:z.l1_id});
           if (wvIsEchteRechterId(z.l2_id)) items.push({z, groepNaam:wvRechterNaam(z.l2_id), highlightRid:z.l2_id});
+          // MK zonder teamrechter (alleen Extern/leeg): toch tonen, anders is hij niet te vinden
+          if (items.length === voor) items.push({z, groepNaam:'(geen teamrechter)', highlightRid:null});
         }
       }
       items.sort((a,b)=>a.groepNaam.localeCompare(b.groepNaam,'nl'));
@@ -4242,7 +4278,7 @@ function wvArchiveerZaak(zid) {
 
 function wvHeractiveer(zid) {
   const z=wvZaken.find(z=>z.id===zid);
-  if (z) { z.afgehandeld=false; delete z.afgesloten_op; delete z.afsluitwijze; uLog('zaak-heractiveerd'); wvOpslaan(); wvRenderZakenLijst(); wvRenderZakenArchief(); wvRenderOverzicht(); wvRenderRechters(); wvRenderVerdeelHistorie(); }
+  if (z) { z.afgehandeld=false; delete z.afgesloten_op; delete z.afsluitwijze; delete z.afsluit_batch; uLog('zaak-heractiveerd'); wvOpslaan(); wvRenderZakenLijst(); wvRenderZakenArchief(); wvRenderOverzicht(); wvRenderRechters(); wvRenderVerdeelHistorie(); }
 }
 
 // Haalt zaakkenmerken uit een plak/CSV-tekst: per regel eerst een sterk patroon
@@ -4279,8 +4315,8 @@ function wvBulkVergelijk() {
   if (!kenmerken.length) { uLog('validatiefout', { actie: 'bulk-vergelijken', reden: 'geen-kenmerken' }); uMelding('Geen zaakkenmerken herkend. Plak losse kenmerken of een uitstroom-CSV met rolnummers.', 'info'); return; }
   const actief=wvZaken.filter(z=>!z.afgehandeld);
   const archief=wvZaken.filter(z=>z.afgehandeld);
-  const inActief =k=>actief.some(z=>z.kenmerk.toLowerCase()===k.toLowerCase());
-  const inArchief=k=>archief.some(z=>z.kenmerk.toLowerCase()===k.toLowerCase());
+  const inActief =k=>actief.some(z=>wvKenmerkSleutel(z.kenmerk)===wvKenmerkSleutel(k));
+  const inArchief=k=>archief.some(z=>wvKenmerkSleutel(z.kenmerk)===wvKenmerkSleutel(k));
   wvBulkGevonden=kenmerken.filter(inActief);
   const alGearchiveerd=kenmerken.filter(k=>!inActief(k)&&inArchief(k));
   const onbekend=kenmerken.filter(k=>!inActief(k)&&!inArchief(k));
@@ -4304,10 +4340,12 @@ function wvBulkVergelijk() {
 function wvBulkArchiveer() {
   if (!wvBulkGevonden.length) return;
   uLog('bulk-gearchiveerd', { aantal: wvBulkGevonden.length });
-  const low=wvBulkGevonden.map(k=>k.toLowerCase());
+  const sleutels=new Set(wvBulkGevonden.map(wvKenmerkSleutel));
   const vandaag=uDatumISO();
-  wvZaken.forEach(z=>{ if (!z.afgehandeld&&low.includes(z.kenmerk.toLowerCase())) { z.afgehandeld=true; z.afgesloten_op=vandaag; z.afsluitwijze='batch'; } });
-  wvToggleArchiefBundel(`${vandaag}|batch`, true);
+  // Elke batch een eigen kenmerk (tijdstip), zodat "terugdraaien" alleen déze batch terugzet
+  const batch=new Date().toTimeString().slice(0,8);
+  wvZaken.forEach(z=>{ if (!z.afgehandeld&&sleutels.has(wvKenmerkSleutel(z.kenmerk))) { z.afgehandeld=true; z.afgesloten_op=vandaag; z.afsluitwijze='batch'; z.afsluit_batch=batch; } });
+  wvToggleArchiefBundel(`${vandaag}|batch|${batch}`, true);
   wvArchiefZoekterm='';
   wvBulkGevonden=[];
   wvOpslaan(); wvRenderZakenLijst(); wvRenderZakenArchief(); wvRenderOverzicht(); wvRenderRechters(); wvRenderVerdeelHistorie();
@@ -4331,7 +4369,7 @@ function wvRenderOverzicht() {
   const gemInt=ovVd&&ovVd.totEFte>0?(ovVd.totPt/ovVd.totEFte).toFixed(2).replace('.',','):'—';
   totEl.innerHTML=`<div class="card-title">Teamoverzicht</div>
     <div class="totalen-blok">
-      <div class="totaal-item"><div class="totaal-item-lbl">Zaken</div><div class="totaal-item-val">${wvZaken.filter(z=>!z.afgehandeld).length}</div><div class="totaal-item-sub">actief${wvZaken.some(z=>z.afgehandeld)?` · ${wvZaken.filter(z=>z.afgehandeld).length} gearc.`:''}</div></div>
+      <div class="totaal-item"><div class="totaal-item-lbl">Zaken</div><div class="totaal-item-val">${wvZaken.filter(z=>!z.afgehandeld&&!zaakIsKanton(z)).length}</div><div class="totaal-item-sub">actief${wvZaken.some(z=>z.afgehandeld)?` · ${wvZaken.filter(z=>z.afgehandeld).length} gearc.`:''}</div></div>
       <div class="totaal-item"><div class="totaal-item-lbl">Totaal punten</div><div class="totaal-item-val">${totPunten.toFixed(1).replace('.',',')}</div><div class="totaal-item-sub">B=${g(wvGewichten.B)} · C=${g(wvGewichten.C)} · D=${g(wvGewichten.D)}</div></div>
       <div class="totaal-item"><div class="totaal-item-lbl">Eff. FTE team</div><div class="totaal-item-val">${totEFTE.toFixed(2).replace('.',',')}</div><div class="totaal-item-sub">beschikbare capaciteit</div></div>
       <div class="totaal-item"><div class="totaal-item-lbl">Norm</div><div class="totaal-item-val">${gemInt}</div><div class="totaal-item-sub">pt per eFTE (zoals in de ranglijst)</div></div>
@@ -4578,12 +4616,11 @@ function wvJaarrapport() {
   const bundels = new Set(afgesloten.map(z => wvBundelKey(z))).size;
 
   // Schrijfkast-verloop uit de weekpost
-  const sk = wpWeekMailArchief
+  const sk = trGetDedup()
     // Jaar van het weeknummer (wpArchiefJaar), niet van de verzenddatum: week 1 die op
     // 31 december is verstuurd hoort bij het nieuwe jaar
-    .filter(m => !m.handmatig && m.schrijfkast && wpArchiefJaar(m) === jaar)
-    .sort((a, b) => wpArchiefSleutel(a) - wpArchiefSleutel(b))
-    .map(m => ({ week: Number(m.week), totaal: Number(m.schrijfkast.totaal) || 0, datum: m.datum }))
+    .filter(m => m.schrijfkast && wpArchiefJaar(m) === jaar)
+    .map(m => ({ week: Number(m.week), totaal: skTotaal(m.schrijfkast), datum: m.datum }))
     .filter(m => Number.isFinite(m.week));
   const skGem = sk.length ? sk.reduce((a, m) => a + m.totaal, 0) / sk.length : null;
 
@@ -4612,7 +4649,7 @@ function wvJaarrapport() {
 
   const tabel   = document.getElementById('wv-overzicht-tabel')?.innerHTML   || '';
   const datum   = uDatumLang();
-  const actief  = wvZaken.filter(z => !z.afgehandeld).length;
+  const actief  = wvZaken.filter(z => !z.afgehandeld && !zaakIsKanton(z)).length;
   const teamR   = wvRechters.filter(r => wvIsRechterRol(r) && wvIsHandelRechter(r));
   const totEFTE = teamR.reduce((a, r) => a + wvHandelEFte(r), 0);
 
@@ -4706,7 +4743,7 @@ function wvJaarrapport() {
 
 // ===== Gewichten =====
 function wvUpdateGewicht(key, val) {
-  wvGewichten[key] = Math.max(0.1, parseFloat(val) || 1);
+  wvGewichten[key] = Math.max(0.1, uGetal(val, 1));
   uLog('instelling-gewijzigd', { instelling: 'gewicht-' + key });
   wvOpslaan();
   wvRenderZakenLijst();
@@ -4738,8 +4775,17 @@ function wvUpdateMkVzBonus(val) {
   wvRenderZakenLijst(); wvRenderOverzicht();
 }
 
+// Getal uit een invoerveld (ook met komma); een ingevulde 0 blijft 0, alleen leeg/onzin
+// valt terug op de standaardwaarde.
+function uGetal(val, standaard) {
+  const n = parseFloat(String(val ?? '').replace(',', '.'));
+  return isNaN(n) ? standaard : n;
+}
 function wvUpdateBelastingMarge(val) {
-  wvBelastingMarge = Math.min(0.5, Math.max(0.01, (parseFloat(val) || 15) / 100));
+  wvBelastingMarge = Math.min(0.5, Math.max(0.01, uGetal(val, 15) / 100));
+  // Toon de waarde die echt geldt (bijv. 0 wordt het minimum van 1%)
+  const inp = document.getElementById('wv-belasting-marge');
+  if (inp) inp.value = Math.round(wvBelastingMarge * 100);
   uLog('instelling-gewijzigd', { instelling: 'belasting-marge' });
   wvOpslaan();
   wvRenderRechters(); wvRenderOverzicht();
@@ -4862,7 +4908,7 @@ function wvRenderKantonInstellingen() {
 }
 
 function wvKantonUpdateGewicht(key, val) {
-  wvKantonGewichten[key] = Math.max(0.1, parseFloat(val) || 1);
+  wvKantonGewichten[key] = Math.max(0.1, uGetal(val, 1));
   wvOpslaan(); wvRenderAll();
 }
 function wvKantonCatToevoegen() {
@@ -4922,7 +4968,7 @@ function wvUpdateCatLabel(cid, val) {
 function wvUpdateCatWaarde(cid, val) {
   const c = wvVrijstellingCats.find(c => c.id === cid);
   if (!c) return;
-  const v = parseFloat(val) || 0;
+  const v = Math.max(0, uGetal(val, 0)); // nooit negatief (dat zou de eFTE verhogen)
   if ((c.eenheid || 'fte') === 'uren') {
     c.uren = v;
     c.fte = Math.round(v / 36 * 100) / 100;
@@ -4947,12 +4993,20 @@ function wvUpdateCatEenheid(cid, eenheid) {
 
 function wvVerwijderCat(cid) {
   const c = wvVrijstellingCats.find(c => c.id === cid);
+  const gebruikers = pkKaarten.filter(k => (k.vrijstellingen || []).some(v => v.cat_id === cid));
   uBevestig('Categorie verwijderen',
-    `Wil je vrijstellingscategorie <strong>${wvEsc(c?.label || '')}</strong> verwijderen?`,
+    `Wil je vrijstellingscategorie <strong>${wvEsc(c?.label || '')}</strong> verwijderen?` +
+    (gebruikers.length ? `<br><span style="font-size:12px;color:#78716c;">${gebruikers.length} ${gebruikers.length === 1 ? 'teamlid houdt' : 'teamleden houden'} deze vrijstelling met de huidige waarde, als vrije invoer.</span>` : ''),
     () => {
       uLog('vrijstcat-verwijderd');
+      // Zoals bij neventaken: de vrijstelling blijft bij de teamleden staan met de actuele
+      // naam en waarde (anders valt de eFTE terug op een oude waarde)
+      if (c) gebruikers.forEach(k => k.vrijstellingen.forEach(v => {
+        if (v.cat_id === cid) { v.label = c.label; v.fte = parseFloat(c.fte) || 0; v.eenheid = c.eenheid || 'fte'; v.uren = c.uren ?? null; delete v.cat_id; }
+      }));
       wvVrijstellingCats = wvVrijstellingCats.filter(c => c.id !== cid);
-      wvOpslaan(); wvRenderVrijstellingCats(); wvRenderRechters();
+      pkSyncAlleNaarWV();
+      pkOpslaan(); wvOpslaan(); wvRenderVrijstellingCats(); wvRenderRechters(); pkRender();
     });
 }
 
@@ -5121,7 +5175,9 @@ function wvArchiveerMomentenHtml(archief) {
 
 // Sleutel van de archiveerbundel waar een afgesloten zaak in valt.
 function wvBundelKey(z) {
-  return z.afgesloten_op ? `${z.afgesloten_op}|${z.afsluitwijze === 'batch' ? 'batch' : 'los'}` : 'onbekend';
+  if (!z.afgesloten_op) return 'onbekend';
+  if (z.afsluitwijze === 'batch') return `${z.afgesloten_op}|batch${z.afsluit_batch ? '|' + z.afsluit_batch : ''}`;
+  return `${z.afgesloten_op}|los`;
 }
 
 function wvBundelZaken(key) {
@@ -5155,10 +5211,10 @@ function wvDuurTekst(dagen) {
 
 function wvBundelLabel(key) {
   if (key === 'onbekend') return 'eerder gearchiveerd (datum niet geregistreerd)';
-  const [datum, wijze] = key.split('|');
+  const [datum, wijze, batch] = key.split('|');
   const d = new Date(datum + 'T00:00:00');
   const dt = isNaN(d) ? datum : d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
-  return `${dt} (${wijze === 'batch' ? 'CSV-batch' : 'los afgesloten'})`;
+  return `${dt} (${wijze === 'batch' ? 'CSV-batch' + (batch ? ' van ' + batch.slice(0, 5) : '') : 'los afgesloten'})`;
 }
 
 // Hele bundel terugdraaien — bedoeld voor de misgeklikte CSV-batch: alle zaken
@@ -5175,7 +5231,7 @@ function wvHeractiveerBundelVraag(key) {
 function wvHeractiveerBundel(key) {
   const zaken = wvBundelZaken(key);
   if (!zaken.length) return;
-  zaken.forEach(z => { z.afgehandeld = false; delete z.afgesloten_op; delete z.afsluitwijze; });
+  zaken.forEach(z => { z.afgehandeld = false; delete z.afgesloten_op; delete z.afsluitwijze; delete z.afsluit_batch; });
   if (wvOpenArchiefBundels) wvOpenArchiefBundels.delete(key);
   uLog('bundel-geheractiveerd', { aantal: zaken.length });
   wvOpslaan(); wvRenderZakenLijst(); wvRenderZakenArchief(); wvRenderOverzicht(); wvRenderRechters(); wvRenderVerdeelHistorie();
@@ -5214,8 +5270,7 @@ function wvRenderPrullenbak() {
   if (!el) return;
   if (!wvZakenPrullenbak.length) { el.innerHTML=''; return; }
   const rijen = wvZakenPrullenbak.map(z => {
-    const ms = new Date(z.verwijderd_op+'T00:00:00').getTime()+14*86400000-Date.now();
-    const dOver = Math.max(0, Math.ceil(ms/86400000));
+    const dOver = Math.max(0, 14 - Math.round((new Date(uDatumISO()+'T12:00:00') - new Date(z.verwijderd_op+'T12:00:00'))/86400000));
     return `<tr>
       <td style="font-size:12px;padding:4px 8px;">Zaak ${wvEsc(z.kenmerk)}</td>
       <td style="font-size:11px;padding:4px 8px;color:#78716c;">${dOver} dag${dOver===1?'':'en'} resterend</td>
@@ -5243,8 +5298,7 @@ function pkRenderPrullenbak() {
   if (!el) return;
   if (!pkPrullenbak.length) { el.innerHTML=''; return; }
   const rijen = pkPrullenbak.map(k => {
-    const ms = new Date(k.verwijderd_op+'T00:00:00').getTime()+14*86400000-Date.now();
-    const dOver = Math.max(0, Math.ceil(ms/86400000));
+    const dOver = Math.max(0, 14 - Math.round((new Date(uDatumISO()+'T12:00:00') - new Date(k.verwijderd_op+'T12:00:00'))/86400000));
     return `<tr>
       <td style="font-size:12px;padding:4px 8px;">${wvEsc(k.naam||'(naamloos)')}</td>
       <td style="font-size:11px;padding:4px 8px;color:#78716c;">${dOver} dag${dOver===1?'':'en'} resterend</td>
@@ -5355,7 +5409,7 @@ function wvVerdelingWijzigen() {
 // Kantonzaken hebben eigen zwaartes en tellen hier bewust niet in mee.
 function wvZakenInVerdeling(week, jaar) {
   return wvZaken.filter(z=>{
-    if (z.afgehandeld) return false;
+    // Ook al afgesloten zaken tellen: ze kwamen die week binnen (anders valt de instroom te laag uit)
     if (z.geimporteerd) return false;
     if (zaakIsKanton(z)) return false;
     if (z.verdeelweek != null) return z.verdeelweek===week && z.verdeeljaar===jaar;
@@ -5941,7 +5995,9 @@ function wvVerdeelWeekOpslaan(id) {
   if (!w) return;
   const num = k => Math.max(0, parseInt(document.getElementById('wv-vw-' + k + '-' + id)?.value) || 0);
   const week = num('week'), jaar = num('jaar');
-  if (uWeekNrValide(week) === null || !jaar) { uMelding('Vul een geldig weeknummer (1 t/m 53) en jaar in.', 'info'); return; }
+  const ditJaar = new Date().getFullYear();
+  if (uWeekNrValide(week) === null || jaar < 2000 || jaar > ditJaar + 1) { uMelding('Vul een geldig weeknummer (1 t/m 53) en een jaartal van vier cijfers in.', 'info'); return; }
+  if (week > wvIsoWekenInJaar(jaar)) { uMelding(`${jaar} heeft maar ${wvIsoWekenInJaar(jaar)} weken.`, 'info'); return; }
   const dubbel = wvVerdeelweken.find(x => x.id !== id && Number(x.week) === week && Number(x.jaar) === jaar);
   if (dubbel) { uMelding('Week ' + week + ' (' + jaar + ') bestaat al.', 'info'); return; }
   w.week = week; w.jaar = jaar;
@@ -5953,7 +6009,9 @@ function wvVerdeelWeekOpslaan(id) {
 function wvVerdeelHandmatigToevoegen() {
   const num = k => Math.max(0, parseInt(document.getElementById('wv-vw-new-' + k)?.value) || 0);
   const week = num('week'), jaar = num('jaar');
-  if (uWeekNrValide(week) === null || !jaar) { uMelding('Vul een geldig weeknummer (1 t/m 53) en jaar in.', 'info'); return; }
+  const ditJaar = new Date().getFullYear();
+  if (uWeekNrValide(week) === null || jaar < 2000 || jaar > ditJaar + 1) { uMelding('Vul een geldig weeknummer (1 t/m 53) en een jaartal van vier cijfers in.', 'info'); return; }
+  if (week > wvIsoWekenInJaar(jaar)) { uMelding(`${jaar} heeft maar ${wvIsoWekenInJaar(jaar)} weken.`, 'info'); return; }
   const bestaand = wvVerdeelweken.find(w => Number(w.week) === week && Number(w.jaar) === jaar);
   if (bestaand) {
     uMelding('Week ' + week + ' (' + jaar + ') bestaat al — corrigeer die rij met ✏️.', 'info');
@@ -5961,7 +6019,9 @@ function wvVerdeelHandmatigToevoegen() {
   }
   wvVerdeelweken.unshift({
     id: wvUid(), week, jaar, datum: uDatumISO(),
-    totaal: num('totaal'), B: num('B'), C: num('C'), D: num('D'), E: num('E'), MK: num('MK'),
+    // Totaal leeg gelaten? Dan uit B/C/D (of E/MK) afleiden
+    totaal: num('totaal') || Math.max(num('B') + num('C') + num('D'), num('E') + num('MK')),
+    B: num('B'), C: num('C'), D: num('D'), E: num('E'), MK: num('MK'),
     handmatig: true,
   });
   uLog('verdeelweek-handmatig-toegevoegd', { week, jaar });
@@ -6114,13 +6174,16 @@ function wvImportParseerDatum(raw) {
   // HTML-tags en tijdsdeel verwijderen
   const s = raw.replace(/<[^>]+>/g, ' ').trim().replace(/[\sT]\d{1,2}:\d{2}.*$/, '');
   // dd-mm-yyyy of d-m-yyyy
+  // Bestaat de datum echt? (31-02 wordt anders stilletjes 3 maart)
+  const bestaat = (j, m, d) => { const x = new Date(j, m - 1, d); return x.getFullYear() === j && x.getMonth() === m - 1 && x.getDate() === d; };
   const nl = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (nl) {
     const iso = `${nl[3]}-${nl[2].padStart(2,'0')}-${nl[1].padStart(2,'0')}`;
-    return isNaN(new Date(iso).getTime()) ? 'ongeldig' : iso;
+    return bestaat(+nl[3], +nl[2], +nl[1]) ? iso : 'ongeldig';
   }
   // yyyy-mm-dd
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return isNaN(new Date(s).getTime()) ? 'ongeldig' : s;
+  const isoM = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoM) return bestaat(+isoM[1], +isoM[2], +isoM[3]) ? s : 'ongeldig';
   return s ? 'ongeldig' : '';
 }
 
@@ -6146,7 +6209,36 @@ function wvExtractKenmerk(raw) {
   if (sterk) return sterk;
   let s = String(raw || '').replace(/<br\s*\/?>/gi, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
   s = s.replace(/^aanbreng[^:]*:\s*/i, '').trim();
-  return s.split(' ')[0] || '';
+  const eerste = s.split(' ')[0] || '';
+  return /^\d{2,4}-\d{1,6}$/.test(eerste) ? eerste : '';
+}
+// Vergelijkingssleutel voor kenmerken: "HA ZA 26-0123", "26-123" en " 26-123 " zijn dezelfde zaak
+function wvKenmerkSleutel(k) {
+  const s = (wvHerkenKenmerk(k) || String(k || '')).toLowerCase().replace(/\s+/g, '');
+  const m = s.match(/^(\d+)-(\d+)$/);
+  return m ? `${+m[1]}-${+m[2]}` : s;
+}
+// CSV/tab-tekst in rijen en cellen, met aanhalingstekens volgens de standaard: een ; of
+// een regelovergang binnen "..." hoort bij de cel, "" is een aanhalingsteken.
+function uCsvRijen(tekst, sep) {
+  const rijen = []; let rij = [], cel = '', inQ = false;
+  for (let i = 0; i < tekst.length; i++) {
+    const c = tekst[i];
+    if (inQ) {
+      if (c === '"') { if (tekst[i + 1] === '"') { cel += '"'; i++; } else inQ = false; }
+      else cel += c;
+    } else if (c === '"' && cel.trim() === '') { inQ = true; cel = ''; }
+    else if (c === sep) { rij.push(cel.trim()); cel = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && tekst[i + 1] === '\n') i++;
+      rij.push(cel.trim()); cel = '';
+      if (rij.some(x => x !== '')) rijen.push(rij);
+      rij = [];
+    } else cel += c;
+  }
+  rij.push(cel.trim());
+  if (rij.some(x => x !== '')) rijen.push(rij);
+  return rijen;
 }
 
 function wvImportAnalyseer() {
@@ -6155,16 +6247,16 @@ function wvImportAnalyseer() {
   if (wvImportSubTabActief === 'per-rechter' && !wvImportRechterKeuze) {
     uMelding('Kies eerst een rechter.', 'info'); return;
   }
-  const regels = tekst.split('\n').map(r => r.trimEnd()).filter(r => r.length > 0);
-  if (!regels.length) { uMelding('Geen regels gevonden.', 'info'); return; }
-
   // Detecteer separator op basis van de eerste regel
-  const eersteRegel = regels[0];
+  const eersteRegel = tekst.split(/\r?\n/)[0];
   const sep = eersteRegel.includes('\t') ? '\t' : (eersteRegel.includes(';') ? ';' : ',');
-  const splitCel = r => r.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+  const rijen = uCsvRijen(tekst.replace(/^\uFEFF/, ''), sep);
+  if (!rijen.length) { uMelding('Geen regels gevonden.', 'info'); return; }
+  const regels = rijen; // per regel al opgesplitst in cellen
+  const splitCel = r => r;
 
   // Detecteer of er een headerrij is
-  const headers = splitCel(eersteRegel).map(h => h.toLowerCase().trim());
+  const headers = rijen[0].map(h => h.toLowerCase().trim());
   const KENMERK_HEADERS = ['zaaknummer','zaakkenmerk','rolnummer','kenmerk','nummer','ref','referentie'];
   const DATUM_HEADERS   = ['datum','registratiedatum','aanbrengdatum','toewijzingsdatum','ingangsdatum'];
   const heeftHeaders = headers.some(h => KENMERK_HEADERS.includes(h) || DATUM_HEADERS.includes(h));
@@ -6210,13 +6302,14 @@ function wvImportAnalyseer() {
 
     if (iZwaarte >= 0) {
       const z = (cellen[iZwaarte] || '').trim().toUpperCase();
-      zwaarte = ['B','C','D'].includes(z) ? z : 'ongeldig';
+      // Lege cel → standaard B; alleen een ingevulde onbekende waarde is ongeldig
+      zwaarte = !z ? 'B' : ['B','C','D'].includes(z) ? z : 'ongeldig';
     } else {
       const zwCell = cellen.find(c => /^[BCD]$/i.test(c.trim()));
       if (zwCell) zwaarte = zwCell.trim().toUpperCase();
     }
 
-    return { kenmerk: kenmerk.trim(), datum, zwaarte, rawLine: raw };
+    return { kenmerk: kenmerk.trim(), datum, zwaarte, rawLine: raw.join(sep === '\t' ? '\t' : sep) };
   }).filter(r => r.kenmerk);
 
   wvImportGeanalyseerd = true;
@@ -6233,18 +6326,19 @@ function wvImportBouwPreview() {
       <button class="btn" onclick="wvImportAnnuleer()" style="margin-top:10px;">Annuleren</button>
     </div>`;
   }
-  const actieveSet = new Set(wvZaken.filter(z => !z.afgehandeld).map(z => z.kenmerk.toLowerCase().trim()));
-  const archiefSet = new Set(wvZaken.filter(z => z.afgehandeld).map(z => z.kenmerk.toLowerCase().trim()));
+  const actieveSet = new Set(wvZaken.filter(z => !z.afgehandeld).map(z => wvKenmerkSleutel(z.kenmerk)));
+  const archiefSet = new Set(wvZaken.filter(z => z.afgehandeld).map(z => wvKenmerkSleutel(z.kenmerk)));
   const statusVan = it => {
-    const kl = it.kenmerk.toLowerCase().trim();
+    const kl = wvKenmerkSleutel(it.kenmerk);
     if (actieveSet.has(kl)) return 'actief';
     if (archiefSet.has(kl)) return 'archief';
     return 'nieuw';
   };
   // Hetzelfde kenmerk twee keer in de CSV: alleen de eerste wordt geïmporteerd
   const eersteIndex = new Map();
-  wvImportExtracted.forEach((it, i) => { const kl = it.kenmerk.toLowerCase().trim(); if (!eersteIndex.has(kl)) eersteIndex.set(kl, i); });
-  const isDubbel = (it, i) => eersteIndex.get(it.kenmerk.toLowerCase().trim()) !== i;
+  // Eerste bruikbare regel per kenmerk telt; latere (of eerdere ongeldige) zijn dubbel
+  wvImportExtracted.forEach((it, i) => { const kl = wvKenmerkSleutel(it.kenmerk); if (!eersteIndex.has(kl) && it.datum !== 'ongeldig' && it.zwaarte !== 'ongeldig') eersteIndex.set(kl, i); });
+  const isDubbel = (it, i) => { const e = eersteIndex.get(wvKenmerkSleutel(it.kenmerk)); return e !== undefined && e !== i; };
   const rechterNaam = wvImportSubTabActief === 'per-rechter' && wvImportRechterKeuze
     ? (wvRechters.find(r => r.id === wvImportRechterKeuze)?.naam || '')
     : '';
@@ -6300,14 +6394,14 @@ function wvImportBouwPreview() {
 
 function wvImportUitvoeren() {
   const vandaag = uDatumISO();
-  const bestaand = new Set(wvZaken.map(z => z.kenmerk.toLowerCase().trim()));
+  const bestaand = new Set(wvZaken.map(z => wvKenmerkSleutel(z.kenmerk)));
   let ingevoerd = 0, overgeslagen = 0;
   for (const item of wvImportExtracted) {
-    if (bestaand.has(item.kenmerk.toLowerCase().trim()) || item.datum === 'ongeldig' || item.zwaarte === 'ongeldig') { overgeslagen++; continue; }
+    if (bestaand.has(wvKenmerkSleutel(item.kenmerk)) || item.datum === 'ongeldig' || item.zwaarte === 'ongeldig') { overgeslagen++; continue; }
     const zaak = { id:wvUid(), kenmerk:item.kenmerk, zwaarte:item.zwaarte, type:'E', datum:item.datum||vandaag, geimporteerd:true };
     if (wvImportSubTabActief === 'per-rechter' && wvImportRechterKeuze) zaak.rechter_id = wvImportRechterKeuze;
     wvZaken.push(zaak);
-    bestaand.add(item.kenmerk.toLowerCase().trim()); // zelfde kenmerk twee keer in één CSV → één zaak
+    bestaand.add(wvKenmerkSleutel(item.kenmerk)); // zelfde kenmerk twee keer in één CSV → één zaak
     ingevoerd++;
   }
   wvOpslaan();
@@ -6345,7 +6439,8 @@ function pkNevenFTE(n) {
 }
 
 function pkInzetStats(naam) {
-  const wvR = wvRechters.find(r => r.naam.toLowerCase() === naam.toLowerCase());
+  const kaart = pkKaarten.find(k => (k.naam || '').toLowerCase() === naam.toLowerCase());
+  const wvR = (kaart && wvRechterVoorKaart(kaart)) || wvRechters.find(r => r.naam.toLowerCase() === naam.toLowerCase());
   if (!wvR) return { totaal: 0, ditJaar: 0, laast: null };
   const rid = wvR.id;
   const zakenVoor = wvZaken.filter(z =>
@@ -6408,7 +6503,7 @@ function pkRender() {
     if (pkSorteer === 'eff_fte')      return pkEffFTE(b) - pkEffFTE(a);
     if (pkSorteer === 'handel_fte')   return (pkEffFTE(b)*(parseFloat(b.handel_pct)||0)/100) - (pkEffFTE(a)*(parseFloat(a.handel_pct)||0)/100);
     if (pkSorteer === 'vrijstellingen') {
-      const vt = k => (k.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0),0);
+      const vt = k => pkAftrekken(k).reduce((s,a)=>s+a.fte,0);
       return vt(b) - vt(a);
     }
     if (pkSorteer === 'neventaken')   return (b.neventaken||[]).length - (a.neventaken||[]).length;
@@ -6449,8 +6544,8 @@ function pkRender() {
     const hkCellStyle = hkWarn ? 'background:#fef2f2;color:#dc2626;' : hkLeeg ? 'background:#fffbeb;color:#92400e;' : '';
     const hkTitle = hkWarn ? `⚠️ Handel + kanton = ${hkTot}%` : hkLeeg ? 'Handel en kanton nog niet ingevuld' : '';
     const vrijst = k.vrijstellingen||[];
-    const vrijstNums = vrijst.map(v=>`−${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')}`).join(' · ');
-    const vrijstTitel = vrijst.map(v=>`${v.label||'—'}: −${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')} FTE`).join('\n');
+    const vrijstNums = vrijst.map(v=>`−${pkVrijstFTE(v).toFixed(2).replace('.',',')}`).join(' · ');
+    const vrijstTitel = vrijst.map(v=>`${v.label||'—'}: −${pkVrijstFTE(v).toFixed(2).replace('.',',')} FTE`).join('\n');
     const ctrUur = Math.round((parseFloat(k.fte)||0)*36);
     const effUur = Math.round(eff*36);
     const u = n => `<br><span style="font-size:10px;color:#a8a29e;">${n} uur</span>`;
@@ -6561,9 +6656,9 @@ function pkDetailHtml(k) {
   const sectie = (titel, inhoud) => `<div style="margin-top:14px;"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#a8a29e;font-weight:700;margin-bottom:4px;">${titel}</div>${inhoud}</div>`;
 
   const vrijst = k.vrijstellingen || [];
-  const vrijTot = vrijst.reduce((s, v) => s + (parseFloat(v.fte) || 0), 0);
+  const vrijTot = vrijst.reduce((s, v) => s + pkVrijstFTE(v), 0);
   const vrijHtml = vrijst.length
-    ? vrijst.map(v => rij(wvEsc(v.label || '—'), `−${(parseFloat(v.fte) || 0).toFixed(2).replace('.',',')} FTE`)).join('') + rij('<strong>Totaal</strong>', `<strong>−${vrijTot.toFixed(2).replace('.',',')} FTE</strong>`)
+    ? vrijst.map(v => rij(wvEsc(v.label || '—'), `−${pkVrijstFTE(v).toFixed(2).replace('.',',')} FTE`)).join('') + rij('<strong>Totaal</strong>', `<strong>−${vrijTot.toFixed(2).replace('.',',')} FTE</strong>`)
     : `<div style="color:#a8a29e;padding:4px 0;">Geen vrijstellingen</div>`;
 
   const neven = k.neventaken || [];
@@ -6778,7 +6873,7 @@ function pkRecalc() {
   const fte       = parseFloat(document.getElementById('pk-edit-fte')?.value)||0;
   const handelPct = parseFloat(document.getElementById('pk-edit-handel')?.value)||0;
   const kantonPct = parseFloat(document.getElementById('pk-edit-kanton')?.value)||0;
-  const vr = (k.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0), 0);
+  const vr = pkAftrekken(k).reduce((s,a)=>s+a.fte, 0); // vrijstellingen én neventaken
   const eff = Math.max(0, fte - vr);
   const el = document.getElementById(`pk-berekend-${k.id}`);
   const hkWarn = (handelPct + kantonPct) > 100;
@@ -6812,7 +6907,20 @@ function pkToggleVakgebied() {
   pkRecalc(); pkSaveFormValues(); pkOpslaan();
 }
 
+// Een nieuw teamlid dat nooit een naam kreeg (bijv. omdat je naar een ander teamlid of
+// scherm ging), wordt weer weggehaald in plaats van als "(naamloos)" te blijven staan.
+function pkRuimNaamlozeOp() {
+  if (!pkIsNieuwKaart || !pkEditingId) return;
+  const k = pkKaarten.find(k => k.id === pkEditingId);
+  if (k && !(k.naam || '').trim()) {
+    pkKaarten = pkKaarten.filter(x => x.id !== k.id);
+    pkEditingId = null; pkIsNieuwKaart = false; pkEditSnapshot = null;
+    pkOpslaan();
+  }
+}
+
 function pkBeginEdit(id) {
+  pkRuimNaamlozeOp();
   const k = pkKaarten.find(k=>k.id===id);
   pkEditSnapshot = k ? JSON.parse(JSON.stringify(k)) : null;
   pkKoppelWV(); // koppeling vastleggen vóórdat de naam eventueel wijzigt
@@ -6843,6 +6951,10 @@ function pkKlaarEdit() {
   if (k) {
     const naam = document.getElementById('pk-edit-naam')?.value.trim();
     if (!naam) { uLog('validatiefout', { actie: 'pk-opslaan', reden: 'geen-naam' }); uMelding('Vul een naam in.', 'info'); return; }
+    if (pkKaarten.some(x => x.id !== k.id && (x.naam || '').trim().toLowerCase() === naam.toLowerCase())) {
+      uMelding(`Er is al een teamlid met de naam "${wvEsc(naam)}". Gebruik een andere naam (bijv. met een voorletter).`, 'info');
+      return;
+    }
     k.naam             = naam;
     k.fte              = Math.min(2, Math.max(0.1, parseFloat(document.getElementById('pk-edit-fte')?.value)||k.fte));
     k.type_aanstelling = document.getElementById('pk-edit-type')?.value.trim() || '';
@@ -6859,9 +6971,9 @@ function pkKlaarEdit() {
     if (k.fte_ingangsdatum && k.fte_voor == null && pkEditSnapshot?.fte && pkEditSnapshot.fte !== k.fte) {
       k.fte_voor = pkEditSnapshot.fte;
     }
-    const totVrijst = (k.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0),0);
+    const totVrijst = pkAftrekken(k).reduce((s,a)=>s+a.fte,0);
     if (totVrijst > k.fte) {
-      uMelding(`Let op: de vrijstellingen (${totVrijst.toFixed(2).replace('.',',')} FTE) zijn meer dan de contractuele FTE (${k.fte.toFixed(2).replace('.',',')}). De effectieve FTE wordt op 0,00 gezet.`, 'info');
+      uMelding(`Let op: de vrijstellingen en neventaken (${totVrijst.toFixed(2).replace('.',',')} FTE) zijn meer dan de contractuele FTE (${k.fte.toFixed(2).replace('.',',')}). De effectieve FTE wordt op 0,00 gezet.`, 'info');
     }
     uLog('pk-teamlid-bewerkt');
     pkOpslaan();
@@ -7064,7 +7176,9 @@ function pkWerkRechterBij(r, k) {
     vrijstellingen: isPlvRio ? r.vrijstellingen : pkAftrekken(k),
     aanstellingsdatum: k.aanstellingsdatum || null,
     fte_ingangsdatum:  k.fte_ingangsdatum  || null,
-    fte_voor:          k.fte_voor ?? null
+    fte_voor:          k.fte_voor ?? null,
+    // "Kan als lid deelnemen aan een meervoudige handelkamer" (alleen zinvol zonder handel%)
+    mk_inzetbaar:      !!k.mk_inzetbaar
   };
   const oud = {};
   Object.keys(nieuw).forEach(veld => { oud[veld] = r[veld] ?? null; });
@@ -7221,7 +7335,7 @@ function pkRenderTotalen() {
     const eff  = pkEffFTE(k);
     const hp   = (parseFloat(k.handel_pct)||0)/100;
     const kp   = (parseFloat(k.kanton_pct)||0)/100;
-    const vrij = (k.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0), 0);
+    const vrij = pkAftrekken(k).reduce((s,a)=>s+a.fte, 0); // vrijstellingen én neventaken
     totFte+=fte; totEff+=eff; totVrij+=vrij;
     totHC+=fte*hp; totKC+=fte*kp; totHE+=eff*hp; totKE+=eff*kp;
   });
@@ -7239,7 +7353,7 @@ function pkRenderTotalen() {
     <div style="display:flex;flex-wrap:wrap;gap:8px 0;align-items:stretch;padding-bottom:10px;border-bottom:1px solid #e2dcd5;">
       ${s('Teamleden', String(n))}${sep}
       ${s('Contract FTE', totFte.toFixed(2).replace('.',','))}
-      ${s('− Vrijstellingen', totVrij.toFixed(2).replace('.',','), '#78716c')}
+      ${s('− Vrijst./neventaken', totVrij.toFixed(2).replace('.',','), '#78716c')}
       ${s('= Effectief', totEff.toFixed(2).replace('.',','))}${sep}
       ${s('Overhead', overhead.toFixed(2).replace('.',','), '#92400e', `${ovPct}% van contract`)}
     </div>
@@ -7250,7 +7364,7 @@ function pkRenderTotalen() {
       ${s('Kanton (eff.)', totKE.toFixed(2).replace('.',','))}
     </div>
     ${nHkLeeg ? `<div style="margin-top:8px;padding:5px 8px;background:#fffbeb;border-radius:4px;font-size:11px;color:#92400e;">⚠️ ${nHkLeeg} ${nHkLeeg===1?'teamlid':'teamleden'} zonder handel/kanton ingevuld</div>` : ''}
-    ${totVrij > 0 ? `<details style="margin-top:8px;"><summary style="font-size:11px;color:#78716c;cursor:pointer;">Vrijstellingen per persoon</summary><div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">${pkTeamTot.filter(k=>(k.vrijstellingen||[]).length>0).map(k=>`<div style="font-size:11px;display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e2dcd5;"><span style="font-weight:600;">${wvEsc(k.naam)}</span><span style="color:#78716c;">${(k.vrijstellingen||[]).map(v=>`${wvEsc(v.label||'—')} ${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')}`).join(' · ')}</span></div>`).join('')}</div></details>` : ''}
+    ${totVrij > 0 ? `<details style="margin-top:8px;"><summary style="font-size:11px;color:#78716c;cursor:pointer;">Vrijstellingen en neventaken per persoon</summary><div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">${pkTeamTot.filter(k=>pkAftrekken(k).length>0).map(k=>`<div style="font-size:11px;display:flex;justify-content:space-between;gap:12px;padding:2px 0;border-bottom:1px solid #e2dcd5;"><span style="font-weight:600;">${wvEsc(k.naam)}</span><span style="color:#78716c;">${pkAftrekken(k).map(a=>`${wvEsc(a.label||'—')} ${a.fte.toFixed(2).replace('.',',')}`).join(' · ')}</span></div>`).join('')}</div></details>` : ''}
   </div>`;
 }
 
@@ -7321,12 +7435,12 @@ function pkExporteerNaarExcel() {
     const eff = pkEffFTE(k);
     const hp  = parseFloat(k.handel_pct)||0;
     const kp  = parseFloat(k.kanton_pct)||0;
-    const vrijStr = (k.vrijstellingen||[]).filter(v=>v.label).map(v=>v.eenheid==='uren'&&v.uren!=null?`${v.label} (${v.uren} uur)`:`${v.label} (${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')} FTE)`).join('; ');
+    const vrijStr = (k.vrijstellingen||[]).filter(v=>v.label).map(v=>v.eenheid==='uren'&&v.uren!=null?`${v.label} (${v.uren} uur)`:`${v.label} (${pkVrijstFTE(v).toFixed(2).replace('.',',')} FTE)`).join('; ');
     const nevenStr = (k.neventaken||[]).map(n=>{
       const lbl = (n.cat_id ? ((pkCategorieen.find(c=>c.id===n.cat_id)||n).label||n.label) : n.label) || '—';
       return `${lbl} (${pkNevenFTE(n).toFixed(2).replace('.',',')} FTE)`;
     }).join('; ');
-    const wvR = wvRechters.find(r=>r.naam.toLowerCase()===k.naam.toLowerCase());
+    const wvR = wvRechterVoorKaart(k);
     const wvPt = wvR ? wvPuntenVoor(wvR.id).toFixed(1).replace('.',',') : '';
     return [k.naam, k.type_aanstelling||'', k.aanstellingsjaar||'',
       (parseFloat(k.fte)||0).toFixed(2).replace('.',','), eff.toFixed(2).replace('.',','),
@@ -7356,7 +7470,7 @@ function pkPrint() {
     const aanst      = [k.type_aanstelling, k.aanstellingsjaar ? `aangesteld ${k.aanstellingsjaar}` : null].filter(Boolean).join(' · ');
 
     const vrijRows = (k.vrijstellingen||[]).map(v => {
-      const aftr = v.eenheid==='uren'&&v.uren!=null ? `${v.uren} uur (−${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')} FTE)` : `−${(parseFloat(v.fte)||0).toFixed(2).replace('.',',')} FTE`;
+      const aftr = v.eenheid==='uren'&&v.uren!=null ? `${v.uren} uur (−${pkVrijstFTE(v).toFixed(2).replace('.',',')} FTE)` : `−${pkVrijstFTE(v).toFixed(2).replace('.',',')} FTE`;
       return `<tr><td>${wvEsc(v.label||'—')}</td><td style="text-align:right;">${aftr}</td></tr>`;
     }).join('');
     const nevenRows = (k.neventaken||[]).map(n => {
@@ -7435,7 +7549,9 @@ function backupDagenGeleden() {
   if (!ts) return null;
   const ms = new Date(ts).getTime();
   if (isNaN(ms)) return null; // corrupte timestamp → behandel als "nog geen backup"
-  return Math.floor((Date.now() - ms) / 86400000);
+  // Kalenderdagen (een backup van gisteravond is "gisteren", niet "vandaag")
+  const dag = iso => new Date(iso + 'T12:00:00').getTime();
+  return Math.max(0, Math.round((dag(uDatumISO()) - dag(uDatumISO(new Date(ms)))) / 86400000));
 }
 
 function updateBackupDot() {
@@ -8413,7 +8529,7 @@ function uStaatLeeg() {
 // Alle schermen opnieuw opbouwen (na laden van ander bestand, herstel of vrijgeven tabblad).
 function uRenderAlles() {
   wvRenderAll(); wpRenderArchief(); wpRenderWistJeDatArchief(); wpRenderNotities();
-  pkRender(); ovRender(); trRender();
+  pkRender(); ovRender(); trRender(); ovUpdateNavBadge();
 }
 
 function fileSkip() {
@@ -8430,6 +8546,7 @@ function fileSkip() {
   wpRenderArchief();
   wpRenderWistJeDatArchief();
   uLog('bestand-overgeslagen');
+  ovUpdateNavBadge();
   setFileStatus('browser', '');
   hideFileOverlay();
 }
@@ -8538,8 +8655,11 @@ function wvSlaSnapshotOp() {
 function wvAutoSnapshot() {
   const week = wpIsoWeek(new Date());
   const jaar = wpIsoJaar(new Date());
-  const bestaand = wvSnapshots.find(s =>
-    s.week === week && (s.jaar === jaar || (s.jaar == null && (s.datum||'').slice(0,4) === String(jaar))));
+  const dezeWeek = wvSnapshots.filter(s =>
+    s.week === week && (s.jaar === jaar || (s.jaar == null && s.datum && wpIsoJaar(new Date(s.datum + 'T12:00:00')) === jaar)));
+  // De automatische snapshot van deze week blijft meelopen, ook als er ook een handmatige is
+  const bestaand = dezeWeek.find(s => s.auto);
+  if (!bestaand && dezeWeek.length) return false; // alleen een handmatige: geen tweede erbij
   if (bestaand) {
     if (!bestaand.auto) return false;
     const nieuw = wvBouwSnapshot(bestaand.notitie);
@@ -8864,7 +8984,19 @@ function trVulVandaag() {
 }
 
 // Gekozen datum → weeknummer meenemen (zolang de gebruiker het weeknummer niet zelf heeft aangepast)
+// Weeknummer ingetypt: datum op de donderdag van de meest recente week met dat nummer,
+// zodat zichtbaar is in welk jaar het datapunt komt (aan te passen via de datum).
+function trWeekGewijzigd() {
+  const wk = uWeekNrValide(document.getElementById('tr-week')?.value);
+  const datumEl = document.getElementById('tr-datum');
+  if (!wk || !datumEl || datumEl.dataset.handmatig === '1') return;
+  let jaar = wpIsoJaar(new Date());
+  if (wk > wpIsoWeek(new Date())) jaar--;
+  const ma = wvDatumVanIsoWeek(jaar, wk);
+  if (ma) { ma.setDate(ma.getDate() + 3); datumEl.value = uDatumISO(ma); }
+}
 function trDatumGewijzigd() {
+  document.getElementById('tr-datum').dataset.handmatig = '1';
   const datumEl = document.getElementById('tr-datum');
   const weekEl = document.getElementById('tr-week');
   datumEl.dataset.auto = '';
@@ -8878,7 +9010,8 @@ function trGetDedup() {
   const byWeek = new Map();
   for (const m of wpWeekMailArchief) {
     const w = wpArchiefSleutel(m); // jaar + week: dezelfde week van een ander jaar is een ander punt
-    if (!byWeek.has(w) || m.handmatig) byWeek.set(w, m);
+    // Een handmatig datapunt gaat vóór een weekmail; van meerdere handmatige wint de nieuwste
+    if (!byWeek.has(w) || (m.handmatig && !byWeek.get(w).handmatig)) byWeek.set(w, m);
   }
   return [...byWeek.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]);
 }
@@ -9011,6 +9144,19 @@ function trAnnuleerEdit() {
   trRenderTabel();
 }
 
+function trVerwijder(i) {
+  const entry = trGetDedup()[i];
+  if (!entry || !entry.handmatig) return;
+  const idx = wpWeekMailArchief.indexOf(entry);
+  if (idx < 0) return;
+  wpWeekMailArchief.splice(idx, 1);
+  uLog('tr-datapunt-verwijderd');
+  wpSaveNu(); trRender();
+  uMeldingOngedaan(`Datapunt week ${entry.week} verwijderd`, () => {
+    wpWeekMailArchief.splice(idx, 0, entry); wpSorteerArchief(); wpSaveNu(); trRender();
+  });
+}
+
 function trSlaEditOp() {
   if (trEditingIndex === null) return;
   const entry = trGetDedup()[trEditingIndex];
@@ -9040,10 +9186,12 @@ function trImporteerNaarWeekpost() {
   wpSorteerArchief();
   // De nieuwste regel met dit weeknummer (archief staat nieuwste eerst), maar niet die van
   // een jaar terug als deze week nog ontbreekt: meer dan een half jaar oud telt niet
+  // Zelfde punten als de grafiek en de historie (een handmatige correctie gaat voor)
   const nu = new Date(), nuIdx = wpIsoJaar(nu) * 53 + wpIsoWeek(nu);
-  const huidig = wpWeekMailArchief.find(m => parseInt(m.week) === week && nuIdx - (wpArchiefJaar(m) * 53 + week) <= 26);
+  const lijst = trGetDedup(); // oud → nieuw
+  const huidig = lijst.filter(m => parseInt(m.week) === week && nuIdx - (wpArchiefJaar(m) * 53 + week) <= 26).pop();
   // Vorige week = het eerstvolgende oudere punt (werkt ook over de jaarwisseling heen)
-  const vorig  = huidig && wpWeekMailArchief.find(m => wpArchiefSleutel(m) < wpArchiefSleutel(huidig));
+  const vorig  = huidig && lijst[lijst.indexOf(huidig) - 1];
   if (!huidig) { uMelding(`Geen werkvoorraaddata gevonden voor week ${week}.<br>Voeg het datapunt toe via Werkvoorraad → Historische data schrijfkast → Handmatig datapunt toevoegen.`, 'info'); return; }
   const sk  = huidig.schrijfkast || {};
   const skv = vorig?.schrijfkast || {};
@@ -9059,7 +9207,7 @@ function trImporteerNaarWeekpost() {
   wpUpdate();
 }
 
-function trVoegHandmatigToe() {
+function trVoegHandmatigToe(bevestigd) {
   const week = document.getElementById('tr-week')?.value.trim();
   const datum = document.getElementById('tr-datum')?.value || uDatumISO();
   if (uWeekNrValide(week) === null) { uLog('validatiefout', { actie: 'tr-toevoegen', reden: 'ongeldig-week' }); uMelding('Vul een weeknummer tussen 1 en 53 in.', 'info'); return; }
@@ -9068,12 +9216,24 @@ function trVoegHandmatigToe() {
   const medior = parseInt(document.getElementById('tr-medior')?.value) || 0;
   const junior = parseInt(document.getElementById('tr-junior')?.value) || 0;
   const totaal = staf + senior + medior + junior;
-  wpWeekMailArchief.push({ week, datum, naam: '(handmatig)', schrijfkast: { staf, senior, medior, junior, totaal }, handmatig: true });
+  const nieuw = { week, datum, naam: '(handmatig)', schrijfkast: { staf, senior, medior, junior, totaal }, handmatig: true };
+  // Bestaat deze week (van dit jaar) al? Dan eerst vragen; een eerder handmatig punt wordt vervangen
+  const sleutel = wpArchiefSleutel(nieuw);
+  const bestaand = wpWeekMailArchief.filter(m => wpArchiefSleutel(m) === sleutel);
+  if (bestaand.length && !bevestigd) {
+    uBevestig('Week bestaat al',
+      `Voor week ${wpEsc(week)} van ${wpArchiefJaar(nieuw)} is al een datapunt. Wil je het vervangen door deze cijfers? (Klopt het jaar niet, pas dan de datum aan.)`,
+      () => trVoegHandmatigToe(true), 'Vervangen');
+    return;
+  }
+  wpWeekMailArchief = wpWeekMailArchief.filter(m => !(m.handmatig && wpArchiefSleutel(m) === sleutel));
+  wpWeekMailArchief.push(nieuw);
   wpSorteerArchief();
   uLog('tr-datapunt-toegevoegd');
-  wpSaveDebounced();
+  wpSaveNu();
   document.getElementById('tr-week').value   = '';
   document.getElementById('tr-datum').value  = '';
+  document.getElementById('tr-datum').dataset.handmatig = '';
   trVulVandaag();
   document.getElementById('tr-staf').value   = 0;
   document.getElementById('tr-senior').value = 0;
@@ -9106,7 +9266,7 @@ function trRenderTabel() {
       </tr>`;
     }
     const editKnop = m.handmatig
-      ? `<button class="btn-edit" onclick="trBewerk(${i})" title="Bewerk datapunt">✏️</button>`
+      ? `<button class="btn-edit" onclick="trBewerk(${i})" title="Bewerk datapunt">✏️</button><button class="btn-edit" style="margin-left:2px;" onclick="trVerwijder(${i})" title="Verwijder datapunt">🗑</button>`
       : '';
     return `<tr>
       <td style="font-weight:600;">Week ${wpEsc(String(m.week))}</td>
@@ -9139,10 +9299,10 @@ function wvExporteerNaarExcel() {
   // Tab 1: Overzicht per rechter (alleen reguliere rechters, excl. rio/plaatsvervangers)
   const ovHeader = ['Naam','Rol','FTE','Eff. FTE','Zaken B','Zaken C','Zaken D','Totaal punten','Pt/eFTE'];
   const ovVd = new Map((wvHandelVerdeelData()?.data || []).map(d => [d.r.id, d]));
-  const ovRijen = wvRechters.map(r => {
+  const ovRijen = wvRechters.filter(wvIsRechterRol).map(r => {
     const efte = ovVd.has(r.id) ? ovVd.get(r.id).eFte : wvHandelEFte(r), punten = wvPuntenVoor(r.id), tl = wvZakentellingVoor(r.id);
     const rolLabel = r.rol==='rio'?'Rio':r.rol==='plaatsvervanger'?'Plaatsvervanger':'Rechter';
-    return [r.naam, rolLabel, r.fte, efte.toFixed(2).replace('.',','), tl.B, tl.C, tl.D, punten.toFixed(1).replace('.',','), efte>0?(punten/efte).toFixed(2).replace('.',','):''];
+    return [r.naam, rolLabel, (parseFloat(r.fte)||0).toFixed(2).replace('.',','), efte.toFixed(2).replace('.',','), tl.B, tl.C, tl.D, punten.toFixed(1).replace('.',','), efte>0?(punten/efte).toFixed(2).replace('.',','):''];
   });
 
   // Tab 2: Zakenlijst
@@ -9151,7 +9311,7 @@ function wvExporteerNaarExcel() {
     const pt = wvZaakPunten(z).toFixed(1).replace('.',',');
     const afg = z.afgehandeld ? 'Ja' : 'Nee';
     if (z.type==='E') return [z.kenmerk, z.zwaarte, 'Enkelvoudig', wvRechterNaam(z.rechter_id), '', '', pt, afg];
-    return [z.kenmerk, z.zwaarte, 'MK', wvRechterNaam(z.vz_id)+' (VZ)', wvRechterNaam(z.l1_id), wvRechterNaam(z.l2_id), pt, afg];
+    return [z.kenmerk, z.zwaarte, 'MK', z.vz_id ? wvRechterNaam(z.vz_id)+' (VZ)' : '', wvRechterNaam(z.l1_id), wvRechterNaam(z.l2_id), pt, afg];
   });
 
   // Eén werkboek: twee sheets onder elkaar in HTML-tabelformaat (opent native in Excel).
@@ -9199,7 +9359,7 @@ function wvExporteerZaken() {
       const pt = wvZaakPunten(z).toFixed(1).replace('.',',');
       const imp = z.geimporteerd ? 'Ja' : 'Nee';
       if (z.type === 'E') return [z.kenmerk, z.zwaarte, 'Enkelvoudig', wvRechterNaam(z.rechter_id), '', '', pt, z.datum||'', imp, z.notitie||''];
-      return [z.kenmerk, z.zwaarte, 'MK', wvRechterNaam(z.vz_id)+' (VZ)', wvRechterNaam(z.l1_id), wvRechterNaam(z.l2_id), pt, z.datum||'', imp, z.notitie||''];
+      return [z.kenmerk, z.zwaarte, 'MK', z.vz_id ? wvRechterNaam(z.vz_id)+' (VZ)' : '', wvRechterNaam(z.l1_id), wvRechterNaam(z.l2_id), pt, z.datum||'', imp, z.notitie||''];
     });
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body>
     ${uHtmlSheet(`Actieve zaken (${rijen.length})`, header, rijen)}
@@ -9387,7 +9547,7 @@ function homeRenderNoteer() {
 function homeVinkTaakAf(taakId) {
   ovVinkOfHeropen(taakId);
   homeRender();
-  uMelding('✓ Taak afgevinkt', 'ok');
+  uMeldingOngedaan('✓ Taak afgevinkt', () => { ovVinkOfHeropen(taakId); homeRender(); });
 }
 
 function ovUpdateNavBadge() {
@@ -9657,6 +9817,7 @@ function ovRechterBewerkPunt(puntId) {
 }
 
 function ovSlaWijzigingRpOp(puntId) {
+  if (ovBewerkendRpId !== puntId) return; // al opgeslagen of geannuleerd
   const pkId = ovPkIdVoorPunt(puntId);
   ovBewerkendRpId = null;
   if (!pkId) return;
@@ -9803,6 +9964,8 @@ function ovKaartHtml(type) {
                 onmouseover="this.style.background='#f5f0ea'" onmouseout="this.style.background=''">${wvEsc(b.tekst)}</span>
               <button onclick="ovZetBespreekpuntTerug('${b.id}')" title="Terugzetten"
                 style="background:none;border:none;cursor:pointer;font-size:13px;color:#bbb;padding:0;flex-shrink:0">↩</button>
+              <button onclick="ovVerwijderBespreekpunt('${b.id}')" title="Verwijderen"
+                style="background:none;border:none;cursor:pointer;font-size:12px;color:#ccc;padding:0;flex-shrink:0">🗑</button>
             </div>`;
         }).join('')}
       </div>
@@ -9973,6 +10136,9 @@ function ovBewerkBespreekpunt(bpId) {
 }
 
 function ovSlaWijzigingBpOp(bpId) {
+  // Na annuleren (Escape/✕) of na Enter is het vak al afgesloten; het "verlaten" van het
+  // vak tijdens het opnieuw opbouwen mag dan niets meer opslaan.
+  if (ovBewerkendBpId !== bpId) return;
   const inp = document.getElementById('ov-bp-edit-' + bpId);
   const bp  = ovBespreekpunten.find(b => b.id === bpId);
   ovBewerkendBpId = null;
@@ -10138,8 +10304,9 @@ function ovRenderTaken() {
         ${typen.map(t => `<option value="${t.id}" ${ovTaakFilter === t.id ? 'selected' : ''}>${wvEsc(t.naam)}</option>`).join('')}
       </select>
       <input id="ov-taak-deadline" type="date" class="form-control"
-        style="width:130px;font-size:13px;${ovDeadlineVeldOpen ? '' : 'display:none;'}" title="Optionele deadline">
-      ${ovDeadlineVeldOpen ? '' : `<button id="ov-taak-deadline-knop" onclick="ovDeadlineVeldOpen=true;ovRenderTaken();document.getElementById('ov-taak-deadline')?.focus()" title="Een deadline bij de nieuwe taak zetten"
+        style="width:130px;font-size:13px;${ovDeadlineVeldOpen ? '' : 'display:none;'}" title="Optionele deadline"
+        onkeydown="if(event.key==='Enter')ovVoegTaakToe()">
+      ${ovDeadlineVeldOpen ? '' : `<button id="ov-taak-deadline-knop" onclick="ovDeadlineVeldOpen=true;const d=document.getElementById('ov-taak-deadline');d.style.display='';this.remove();d.focus()" title="Een deadline bij de nieuwe taak zetten"
         style="background:none;border:none;cursor:pointer;font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;white-space:nowrap;padding:2px 4px">＋ deadline</button>`}
       <button class="btn btn-primary" style="padding:8px 12px" onclick="ovVoegTaakToe()">＋</button>
     </div>
@@ -10222,6 +10389,8 @@ function ovVoegTaakToe() {
 }
 
 function ovVinkOfHeropen(taakId) {
+  // Vinkje in een taak die je aan het bewerken bent: eerst de bewerking bewaren
+  if (ovBewerkendTaakId) ovSlaWijzigingTaakOp(ovBewerkendTaakId);
   const t = ovTaken.find(t => t.id === taakId);
   if (!t) return;
   t.afgevinkt = !t.afgevinkt;
@@ -10255,6 +10424,7 @@ function ovBewerkTaak(taakId) {
 }
 
 function ovSlaWijzigingTaakOp(taakId) {
+  if (ovBewerkendTaakId !== taakId) return; // al opgeslagen of geannuleerd
   const inpTekst    = document.getElementById('ov-taak-edit-tekst-'    + taakId);
   const inpLabel    = document.getElementById('ov-taak-edit-label-'    + taakId);
   const inpDeadline = document.getElementById('ov-taak-edit-deadline-' + taakId);
@@ -10326,7 +10496,8 @@ function ovDragDrop(dropTaakId) {
   if (pos1 === -1 || pos2 === -1) { ovDragTaakId = null; return; }
   const [taak] = ovTaken.splice(pos1, 1);
   const newPos = ovTaken.findIndex(t => t.id === dropTaakId);
-  ovTaken.splice(newPos, 0, taak);
+  // Naar beneden slepen: ná het doel; naar boven: ervóór
+  ovTaken.splice(pos1 < pos2 ? newPos + 1 : newPos, 0, taak);
   ovDragTaakId = null;
   ovOpslaan();
   ovRenderTaken();
@@ -10382,7 +10553,7 @@ function ovHernoemType(id) {
   const huidig = type.naam;
   titelEl.outerHTML = `<input id="ov-hernoem-${id}" class="form-control" type="text" value="${wvEsc(huidig)}"
     style="font-family:Georgia,serif;font-size:15px;font-weight:700;flex:1;margin:0"
-    onblur="ovSlaHernoemOp('${id}')"
+    onclick="event.stopPropagation()" onblur="ovSlaHernoemOp('${id}')"
     onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value=this.defaultValue;this.blur();}">`;
   document.getElementById('ov-hernoem-' + id)?.select();
 }
@@ -10404,24 +10575,41 @@ function ovSlaHernoemOp(id) {
 function ovVerwijderType(id) {
   const type = ovOverlegtypen.find(t => t.id === id);
   if (!type) return;
-  const actief = ovBespreekpunten.filter(b => b.overleg_id === id && !b.archief_id);
-  if (actief.length > 0) {
+  const open = ovBespreekpunten.filter(b => b.overleg_id === id && !b.besproken && !b.archief_id);
+  if (open.length > 0) {
     uBevestig('Overlegtype verwijderen',
-      `"${wvEsc(type.naam)}" heeft nog ${actief.length} punt${actief.length === 1 ? '' : 'en'}. Toch verwijderen?`,
+      `"${wvEsc(type.naam)}" heeft nog ${open.length} openstaand${open.length === 1 ? ' punt' : 'e punten'}. Toch verwijderen? Taken blijven bewaard als losse taak.`,
       () => _ovVerwijderTypeDoen(id));
     return;
   }
   _ovVerwijderTypeDoen(id);
 }
 function _ovVerwijderTypeDoen(id) {
+  const type = ovOverlegtypen.find(t => t.id === id);
+  if (!type) return;
+  // Bewaren voor "ongedaan maken"; bespreekpunten en vergaderingen gaan mee weg (anders
+  // blijven ze onzichtbaar in het databestand staan), taken blijven als losse taak
+  const takenIds = ovTaken.filter(t => t.overleg_id === id).map(t => t.id);
+  const punten = ovBespreekpunten.filter(b => b.overleg_id === id);
+  const vergaderingen = ovVergaderingen.filter(v => v.overleg_id === id);
   ovOverlegtypen = ovOverlegtypen.filter(t => t.id !== id);
-  ovTaken.forEach(t => { if (t.overleg_id === id) t.overleg_id = null; }); // taken blijven, als losse taak
+  ovBespreekpunten = ovBespreekpunten.filter(b => b.overleg_id !== id);
+  ovVergaderingen = ovVergaderingen.filter(v => v.overleg_id !== id);
+  ovTaken.forEach(t => { if (t.overleg_id === id) t.overleg_id = null; });
   ovOverlegtypen.sort((a, b) => a.volgorde - b.volgorde).forEach((t, i) => { t.volgorde = i; });
   if (ovTaakFilter === id) ovTaakFilter = 'alles';
   ovOpenAccordion.delete(id);
   ovOpslaan();
-  ovRenderOverleggen();
+  ovRender();
   uLog('ov-overlegtype-verwijderd');
+  uMeldingOngedaan(`Overlegtype "${type.naam}" verwijderd`, () => {
+    ovOverlegtypen.forEach(t => { if (t.volgorde >= type.volgorde) t.volgorde++; });
+    ovOverlegtypen.push(type);
+    ovBespreekpunten.push(...punten);
+    ovVergaderingen.push(...vergaderingen);
+    ovTaken.forEach(t => { if (takenIds.includes(t.id)) t.overleg_id = id; });
+    ovOpslaan(); ovRender();
+  });
 }
 
 function ovVerschuifType(id, richting) {
@@ -10992,7 +11180,7 @@ document.addEventListener('keydown', function(e) {
               <li><p>Vul weeknummer, staf en senior in (medior en junior zijn optioneel).</p></li>
               <li><p>Klik op <kbd>+ Toevoegen</kbd>.</p></li>
             </ol>
-            <p>Handmatig toegevoegde datapunten zijn bewerkbaar via het tabblad <strong>Historie</strong>.</p>
+            <p>Handmatig toegevoegde datapunten zijn op het tabblad <strong>Historie</strong> te bewerken (✏️) of te verwijderen (🗑). Een handmatig datapunt gaat vóór de weekmail van dezelfde week; voeg je voor een week een nieuw punt toe, dan vervangt dat het vorige. Typ je een weeknummer, dan springt de datum naar die week — klopt het jaar niet, pas dan de datum aan.</p>
           </div>
         </section>
 
