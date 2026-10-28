@@ -626,6 +626,7 @@
   <button class="app-nav-status status-none" id="file-status" onclick="showFileOverlay()" title="Klik om databestand te beheren"><span id="file-status-text">📁 Geen bestand</span></button>
 </div>
 <!-- MULTI-INSTANTIE WAARSCHUWING -->
+<div id="wv-verdeling-balk" style="display:none;background:#fffbeb;border-bottom:1px solid #fde68a;padding:8px 18px;font-family:Arial,sans-serif;font-size:13px;color:#78350f;align-items:center;gap:10px;"></div>
 <div id="multi-instantie-warn" role="alert" style="display:none;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:10px 18px;font-size:13px;color:#92400e;align-items:center;gap:10px;">
   <span style="font-size:18px;">⚠️</span>
   <span id="multi-instantie-tekst"></span>
@@ -751,17 +752,17 @@
           <thead><tr><th>Categorie</th><th>Deze wk</th><th>Vorige wk</th></tr></thead>
           <tbody>
             <tr><td class="sk-cat">Stafjurist</td>
-              <td><input type="number" id="wp-sk-staf" value="3" min="0" oninput="wpUpdate()"></td>
-              <td><input type="number" id="wp-sk-staf-prev" value="4" min="0" oninput="wpUpdate()"></td></tr>
+              <td><input type="number" id="wp-sk-staf" value="" placeholder="0" min="0" oninput="wpUpdate()"></td>
+              <td><input type="number" id="wp-sk-staf-prev" value="" placeholder="0" min="0" oninput="wpUpdate()"></td></tr>
             <tr><td class="sk-cat">Senior gerechtsjurist</td>
-              <td><input type="number" id="wp-sk-senior" value="8" min="0" oninput="wpUpdate()"></td>
-              <td><input type="number" id="wp-sk-senior-prev" value="10" min="0" oninput="wpUpdate()"></td></tr>
+              <td><input type="number" id="wp-sk-senior" value="" placeholder="0" min="0" oninput="wpUpdate()"></td>
+              <td><input type="number" id="wp-sk-senior-prev" value="" placeholder="0" min="0" oninput="wpUpdate()"></td></tr>
             <tr><td class="sk-cat">Medior gerechtsjurist</td>
-              <td><input type="number" id="wp-sk-medior" value="7" min="0" oninput="wpUpdate()"></td>
-              <td><input type="number" id="wp-sk-medior-prev" value="8" min="0" oninput="wpUpdate()"></td></tr>
+              <td><input type="number" id="wp-sk-medior" value="" placeholder="0" min="0" oninput="wpUpdate()"></td>
+              <td><input type="number" id="wp-sk-medior-prev" value="" placeholder="0" min="0" oninput="wpUpdate()"></td></tr>
             <tr><td class="sk-cat">Junior gerechtsjurist</td>
-              <td><input type="number" id="wp-sk-junior" value="5" min="0" oninput="wpUpdate()"></td>
-              <td><input type="number" id="wp-sk-junior-prev" value="5" min="0" oninput="wpUpdate()"></td></tr>
+              <td><input type="number" id="wp-sk-junior" value="" placeholder="0" min="0" oninput="wpUpdate()"></td>
+              <td><input type="number" id="wp-sk-junior-prev" value="" placeholder="0" min="0" oninput="wpUpdate()"></td></tr>
           </tbody>
         </table>
         <div class="sk-totaal">
@@ -869,7 +870,7 @@
         <button class="btn btn-dark wp-copy-btn" onclick="wpCopyToClipboard()">📋 Kopieer naar klembord</button>
         <button class="btn btn-primary" onclick="wpOpenInOutlook()">📧 Openen in Outlook</button>
       </div>
-      <p class="hint-footer">Klik "Openen in Outlook" → dubbelklik het gedownloade .eml-bestand → Outlook opent een nieuw bericht.</p>
+      <p class="hint-footer">Klik "Openen in Outlook" → dubbelklik het gedownloade .eml-bestand → Outlook opent een nieuw bericht. Verstuurd? Klik daarna in het venster dat verschijnt op <strong>Mail verstuurd — archiveren</strong>; dan staat de weekpost klaar voor volgende week.</p>
     </div>
 
     <!-- ARCHIEF -->
@@ -1298,8 +1299,17 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.19';
+const TOOLKIT_VERSIE = '2026.10.20';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.20', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
+    'Ga je weg uit een open verdeling, dan vraagt de toolkit dat nog maar één keer; daarna staat bovenaan een balkje <strong>"Verdeling week … staat nog open"</strong> met <em>Terug naar verdelen</em> en <em>Week afronden</em>',
+    'De schrijfkast in een nieuwe weekpost begint leeg (er stonden voorbeeldcijfers in)',
+    'Gewone woorden op de personeelskaart: <strong>Telt mee vanaf</strong>, <strong>FTE vóór wijziging</strong> en <strong>Nieuwe FTE vanaf</strong>',
+    'Onder de weekpost-preview staat nu dat je na het versturen op <strong>Mail verstuurd — archiveren</strong> klikt',
+    'Staat de weekpost uit, dan verwijst de werkvoorraad naar <strong>➕ Handmatig toevoegen</strong>',
+    '<strong>Snel noteren</strong> sluit na opslaan, met een knop om het ongedaan te maken; nog iets noteren = opnieuw N',
+    'Het zoekveld in het weekpost-archief houdt de cursor vast terwijl je typt',
+  ]},
   { versie: '2026.10.19', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     '<strong>Overleggen:</strong> Escape en ✕ annuleren een bewerking nu echt (de tekst werd toch opgeslagen); een taak naar beneden slepen komt op de juiste plek; klikken in het hernoem-vak klapt de kaart niet meer dicht; met <strong>＋ deadline</strong> raak je je getypte taak niet meer kwijt; besproken punten zijn te verwijderen; een verwijderd overlegtype is ongedaan te maken; een taak afvinken op het startscherm ook',
     '<strong>Personeelskaart:</strong> het bewerkformulier, de totalen, de detailkaart, afdrukken en Excel rekenen nu ook met neventaken en de actuele waarde van vrijstellingscategorieën; een nieuw teamlid zonder naam blijft niet meer achter; een dubbele naam wordt gemeld; het vinkje "kan deelnemen aan een meervoudige kamer" werkt nu ook in de verdeling; een verwijderde vrijstellingscategorie blijft bij de teamleden staan met de laatste waarde',
@@ -2046,14 +2056,33 @@ function homeNaarKanton() {
   showViewByName('werklastverdeling');
 }
 
+// De vraag "Verdeling verlaten?" komt één keer per sessie; daarna herinnert een balkje
+// bovenaan aan de open verdeling.
+let _wvVerlatenGevraagd = false;
 function showView(name, btn) {
-  if (wvVerdelingActief && name !== 'werklastverdeling') {
+  if (wvVerdelingActief && name !== 'werklastverdeling' && !_wvVerlatenGevraagd) {
     uBevestig('Verdeling verlaten',
-      `Verdeling week <strong>${wvVerdelingWeek}</strong> is nog bezig. Wil je de werklastverdeling verlaten?`,
-      () => _showView(name, btn), 'Verlaten');
+      `Verdeling week <strong>${wvVerdelingWeek}</strong> is nog bezig. Wil je de werklastverdeling verlaten? De verdeling blijft openstaan; bovenaan zie je een herinnering.`,
+      () => { _wvVerlatenGevraagd = true; _showView(name, btn); }, 'Verlaten');
     return;
   }
   _showView(name, btn);
+}
+// Herinneringsbalk bovenaan zolang er een verdeling openstaat en je op een ander scherm bent
+function wvRenderVerdelingBalk() {
+  const el = document.getElementById('wv-verdeling-balk');
+  if (!el) return;
+  const scherm = document.querySelector('.view.active')?.id;
+  if (!wvVerdelingActief || wvVerdelingWeek == null || scherm === 'view-werklastverdeling') { el.style.display = 'none'; return; }
+  el.innerHTML = `<span style="font-size:16px;">🗓</span>
+    <span><strong>Verdeling week ${wvEsc(String(wvVerdelingWeek))} staat nog open.</strong></span>
+    <button class="btn btn-ghost btn-klein" style="padding:4px 10px;margin-left:auto;" onclick="wvNaarVerdelen()">Terug naar verdelen</button>
+    <button class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="wvVerdelingAfronden();wvRenderVerdelingBalk()">✓ Week afronden</button>`;
+  el.style.display = 'flex';
+}
+function wvNaarVerdelen() {
+  showViewByName('werklastverdeling');
+  wvTab('verdelen', document.querySelector('#view-werklastverdeling .tab[onclick*="verdelen"]'));
 }
 
 function _showView(name, btn) {
@@ -2063,6 +2092,7 @@ function _showView(name, btn) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.app-nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
+  wvRenderVerdelingBalk();
   if (btn) btn.classList.add('active');
   document.getElementById('app-title').textContent = VIEW_TITLES[name] || name;
   updateAppHeaderRight(name);
@@ -2814,6 +2844,9 @@ function wpRenderArchief() {
     return Number(b.week)-Number(a.week);
   });
   const gefilterd = alle.filter(passFilter);
+  // Typ je in het zoekveld, dan blijft de cursor op zijn plek na het opnieuw opbouwen
+  const actief = document.activeElement;
+  const zoekCursor = actief && actief.id === 'wp-archief-zoek' ? actief.selectionStart : null;
   const zoekBalk = `
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
       <input id="wp-archief-zoek" class="form-control" type="search" placeholder="Zoek in weekmails…"
@@ -2865,9 +2898,9 @@ function wpRenderArchief() {
       <tbody>${rijen}</tbody>
     </table>` : ''}
   </div>`;
-  if (zoek) {
+  if (zoekCursor !== null) {
     const inp = document.getElementById('wp-archief-zoek');
-    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    if (inp) { inp.focus(); try { inp.setSelectionRange(zoekCursor, zoekCursor); } catch(e) {} }
   }
 }
 
@@ -5330,6 +5363,7 @@ function wvVerdelingLaden() {
 
 function wvVerdelingOpslaan() {
   lsZet('teamvz_verdeling', JSON.stringify({actief:wvVerdelingActief,week:wvVerdelingWeek,jaar:wvVerdelingJaar}));
+  wvRenderVerdelingBalk();
 }
 
 // Een gestarte verdeling die niet is afgerond terwijl de kalenderweek al verder is.
@@ -5834,7 +5868,7 @@ function wvRenderVerdeelRanglijst() {
 function _wvRenderKantonRanglijst() {
   const leegHint = `<div class="card" style="padding:12px 16px;">
     <div class="card-title" style="margin-bottom:6px;">Evenredige verdeling — kanton</div>
-    <div style="font-family:Arial,sans-serif;font-size:12px;color:#78716c;line-height:1.6;">Nog niet genoeg gegevens. Er zijn minstens twee rechters met een kanton-percentage in de personeelskaart nodig — controleer de vinkjes handel/kanton in de PK en gebruik ＋ Verdeling om ze naar de werklastverdeling te halen.</div>
+    <div style="font-family:Arial,sans-serif;font-size:12px;color:#78716c;line-height:1.6;">Nog niet genoeg gegevens. Er zijn minstens twee rechters met een kanton-percentage in de personeelskaart nodig — controleer de vinkjes handel/kanton in de personeelskaart en gebruik ＋ Verdeling om ze naar de werklastverdeling te halen.</div>
   </div>`;
   const kvd = wvKantonVerdeelData();
   if (!kvd || kvd.team.length < 2 || kvd.totEFte === 0) { _wvZetRanglijst(leegHint); return; }
@@ -5887,8 +5921,8 @@ function _wvRenderHandelRanglijst() {
     const bg       = _st === 'onder' ? '#f0fdf4' : _st === 'boven' ? '#fef2f2' : '';
     const barKleur = _st === 'onder' ? '#86efac' : _st === 'boven' ? '#fca5a5' : '#d4cfc8';
     const badges   = [
-      d.r.aanstellingsdatum ? `mee v/a ${d.r.aanstellingsdatum.slice(0,7)}` : '',
-      d.r.fte_ingangsdatum  ? `FTE v/a ${d.r.fte_ingangsdatum.slice(0,7)}` : ''
+      d.r.aanstellingsdatum ? `telt mee vanaf ${d.r.aanstellingsdatum.slice(0,7)}` : '',
+      d.r.fte_ingangsdatum  ? `nieuwe FTE vanaf ${d.r.fte_ingangsdatum.slice(0,7)}` : ''
     ].filter(Boolean).join(' · ');
     const isOpen = wvRlOpen.has(d.r.id);
     return `<tr class="wv-rl-rij" data-rid="${d.r.id}" style="cursor:pointer;${bg?`background:${bg};`:''}" onclick="wvRlToggle(this)" title="Klik voor de zaken van deze rechter">
@@ -6795,11 +6829,11 @@ function pkEditRij(k) {
           <input type="number" id="pk-edit-fte" value="${k.fte}" min="0.1" max="2" step="0.1" onchange="pkRecalc();pkSaveFormValues();pkOpslaan()" onkeydown="if(event.key==='Enter')pkKlaarEdit()"></div>
         <div style="width:110px;flex-shrink:0;"><label>Aanstellingsjaar</label>
           <input type="number" id="pk-edit-jaar" value="${k.aanstellingsjaar||''}" placeholder="bijv. 2019" min="1990" max="2099" step="1" onchange="pkSaveFormValues();pkOpslaan()" onkeydown="if(event.key==='Enter')pkKlaarEdit()"></div>
-        <div style="flex:1;min-width:130px;"><label title="Vanaf deze datum telt de rechter mee in de evenredige verdeling — handig bij intrede of terugkomst na afwezigheid">Meetellen v/a</label>
+        <div style="flex:1;min-width:130px;"><label title="Vanaf deze datum telt de rechter mee in de evenredige verdeling — handig bij intrede of terugkomst na afwezigheid">Telt mee vanaf</label>
           <input type="date" id="pk-edit-aanstdatum" value="${k.aanstellingsdatum||''}" onchange="pkSaveFormValues();pkOpslaan()" onkeydown="if(event.key==='Enter')pkKlaarEdit()"></div>
-        <div style="flex:1;min-width:110px;"><label title="Vorige FTE (vóór de ingangsdatum hiernaast) — vul in bij contractwijziging">Was FTE</label>
+        <div style="flex:1;min-width:110px;"><label title="Vorige FTE (vóór de ingangsdatum hiernaast) — vul in bij contractwijziging">FTE vóór wijziging</label>
           <input type="number" id="pk-edit-fte-voor" value="${k.fte_voor!=null?k.fte_voor:''}" min="0.1" max="2" step="0.1" placeholder="—" onchange="pkSaveFormValues();pkOpslaan()" onkeydown="if(event.key==='Enter')pkKlaarEdit()"></div>
-        <div style="flex:1;min-width:130px;"><label title="Datum waarop de huidige FTE ingaat — vóór deze datum wordt gerekend met 'Was FTE'">FTE geldig v/a</label>
+        <div style="flex:1;min-width:130px;"><label title="Datum waarop de huidige FTE ingaat — vóór deze datum wordt gerekend met 'FTE vóór wijziging'">Nieuwe FTE vanaf</label>
           <input type="date" id="pk-edit-fte-ingangsdatum" value="${k.fte_ingangsdatum||''}" onchange="pkSaveFormValues();pkOpslaan()" onkeydown="if(event.key==='Enter')pkKlaarEdit()"></div>
       </div>
       <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">
@@ -9021,7 +9055,8 @@ function trRenderChart() {
   if (!el) return;
   const raw = trGetDedup();
   if (raw.length < 2) {
-    el.innerHTML = `<div class="tr-leeg">${raw.length === 0 ? 'Verzend weekmails via De Weekpost om hier de ontwikkeling te zien.' : 'Nog maar één datapunt — verzend meer weekmails om een trend te zien.'}</div>`;
+    const bron = wpModuleActief ? 'verzend weekmails via De Weekpost' : 'voeg de cijfers per week toe via ➕ Handmatig toevoegen';
+    el.innerHTML = `<div class="tr-leeg">${raw.length === 0 ? bron.charAt(0).toUpperCase() + bron.slice(1) + ' om hier de ontwikkeling te zien.' : 'Nog maar één datapunt — ' + bron + ' om een trend te zien.'}</div>`;
     return;
   }
   const tonen = trSeries.filter(s => s.toon);
@@ -9442,16 +9477,18 @@ function ovNoteerOpslaan(prefix, soort, id) {
   const tekst = input.value.trim();
   if (!tekst) { uMelding('Typ eerst wat je wilt onthouden', 'info'); input.focus(); return; }
   let melding;
+  // Voor "ongedaan maken": de stand van vóór het noteren
+  const voor = JSON.stringify({ t: ovTaken, b: ovBespreekpunten, r: ovRechterNotities, w: ovWeekpostNotities });
   if (soort === 'overleg') {
     const type = ovOverlegtypen.find(t => t.id === id);
     if (!type) return;
     ovNieuwBespreekpunt(type.id, tekst);
-    melding = 'Toegevoegd aan ' + wvEsc(type.naam);
+    melding = 'Toegevoegd aan ' + type.naam;
   } else if (soort === 'rechter') {
     const k = pkKaarten.find(k => String(k.id) === String(id));
     if (!k) return;
     ovNieuwRechterPunt(k.id, tekst);
-    melding = 'Genoteerd bij ' + wvEsc(k.naam || '');
+    melding = 'Genoteerd bij ' + (k.naam || '');
   } else if (soort === 'weekpost') {
     ovWeekpostNotities.push({ id: wvUid(), tekst, datum: uDatumISO() });
     melding = 'Genoteerd voor de weekpost — staat klaar bij Invullen';
@@ -9464,8 +9501,13 @@ function ovNoteerOpslaan(prefix, soort, id) {
   wpRenderNotities();
   ovRender();
   homeRender();
-  uMelding('✓ ' + melding, 'ok');
-  document.getElementById(prefix + '-tekst')?.focus();
+  if (prefix === 'home-nt') document.getElementById(prefix + '-tekst')?.focus();
+  else ovNoteerSluit(); // venster dicht; nog iets noteren = opnieuw N
+  uMeldingOngedaan('✓ ' + melding, () => {
+    const v = JSON.parse(voor);
+    ovTaken = v.t; ovBespreekpunten = v.b; ovRechterNotities = v.r; ovWeekpostNotities = v.w;
+    ovOpslaan(); wpRenderNotities(); ovRender(); homeRender();
+  });
   uLog('ov-snel-genoteerd', { soort, plek: prefix === 'home-nt' ? 'startscherm' : 'venster' });
 }
 // Weekpost → Invullen: notities die via Snel noteren zijn bewaard, met per notitie de rubrieken
@@ -11003,7 +11045,7 @@ document.addEventListener('keydown', function(e) {
             <p><strong>Afwezigheid.</strong> Op het tabblad <strong>Team</strong> voer je per rechter afwezigheidsperiodes in (begin- en einddatum), of je zet het vinkje <em>afwezig</em> (dat geldt vanaf het moment van aanvinken; bij uitvinken wordt het vanzelf een periode met datums). Een afwezigheid van <strong>minstens een hele week</strong> (5 werkdagen) verlaagt het eerlijke aandeel over die weken: wie terugkomt staat gewoon "rond" en hoeft niets in te halen. Kortere afwezigheid blijft zichtbaar maar verandert de verdeling niet. Een afwezigheid die nog moet beginnen, verandert de stand niet: je ziet in de ranglijst en bij het advies alleen een hint als <em>"🏖 afwezig vanaf 9 nov (2 wk)"</em>. Wie vandaag afwezig is, staat wel in de ranglijst maar krijgt geen advies.</p>
             <p><strong>Zaken afsluiten verandert de stand.</strong> Omdat alleen openstaande zaken tellen, verschuiven de percentages als je een stapel zaken afsluit: wie veel heeft afgerond, komt lager te staan en krijgt de komende tijd weer wat meer. Dat is zo bedoeld — de verdeling gaat over de werkvoorraad van nu.</p>
             <p>Rechts in de ranglijst zie je per rechter de afwijking van zijn/haar eerlijke aandeel als <strong>percentage</strong> (vet), met de punten klein erachter. Het percentage vergelijk je direct met de <strong>marge</strong> (standaard ±15%, instelbaar bij Instellingen): daarboven kleurt de rij rood, daaronder groen. De twee streepjes in het balkje markeren die marge. Bij rechters met nog weinig punten kan een klein verschil een hoog percentage geven; kijk dan ook naar de punten.</p>
-            <p>Staat bij een rechter "mee v/a" (aanstellingsdatum op de personeelskaart), dan telt die pas mee vanaf die datum. Oudere zaken die hij of zij toch heeft (bijvoorbeeld overgenomen), tellen neutraal: niet mee als achterstand en niet als overbelasting.</p>
+            <p>Staat bij een rechter "telt mee vanaf" (de datum bij <em>Telt mee vanaf</em> op de personeelskaart), dan telt die pas mee vanaf die datum. Oudere zaken die hij of zij toch heeft (bijvoorbeeld overgenomen), tellen neutraal: niet mee als achterstand en niet als overbelasting.</p>
             <p>Het <strong>advies</strong> onder de rechterkeuze, het <strong>⚠-symbool</strong> in de keuzelijst, de <strong>ranglijst</strong>, het <strong>teamoverzicht</strong>, de <strong>snapshot-trend</strong> en op het startscherm de <strong>meldingen</strong>, <strong>Spreiding rechters</strong>, <strong>Intensiteit</strong> en <strong>Handel &amp; kanton per rechter</strong> gebruiken allemaal dezelfde berekening en geven dus altijd hetzelfde oordeel. Voor kanton geldt hetzelfde met de kanton-ranglijst.</p>
           </div>
           <div class="hdl-card">
