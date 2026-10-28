@@ -455,6 +455,8 @@
   .vrijst-rij { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 6px; }
   .vrijst-rij .vr-lbl { flex: 1; }
   .vrijst-rij .vr-fte { width: 140px; flex-shrink: 0; }
+  .vrijst-rij .vr-tot { width: 132px; flex-shrink: 0; }
+  .vrijst-rij .vr-tot input { font-size: 11px; padding: 4px 6px; }
   .afwezig-rij { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-family: Arial, sans-serif; font-size: 12px; color: #78716c; }
   .afwezig-rij input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b; flex-shrink: 0; }
   .afwezig-rij label { margin: 0; text-transform: none; letter-spacing: 0; font-size: 12px; cursor: pointer; color: #78716c; }
@@ -1009,11 +1011,11 @@
             </div>
             <div class="field">
               <label>Zwaarte</label>
-              <select id="wv-kz-zwaarte">
-                <option value="eenvoudig" selected>eenvoudig</option>
-                <option value="normaal">normaal</option>
-                <option value="complex">complex</option>
-              </select>
+              <div class="knopkeuze" id="wv-kz-zwaarte" role="group" aria-label="Zwaarte kantonzaak">
+                <button type="button" data-waarde="eenvoudig" class="actief" onclick="wvSetKantonZwaarte('eenvoudig')">Eenvoudig</button>
+                <button type="button" data-waarde="normaal" onclick="wvSetKantonZwaarte('normaal')">Normaal</button>
+                <button type="button" data-waarde="complex" onclick="wvSetKantonZwaarte('complex')">Complex</button>
+              </div>
             </div>
           </div>
           <div class="field" style="margin-bottom:14px;">
@@ -1318,8 +1320,14 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.23';
+const TOOLKIT_VERSIE = '2026.10.24';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.24', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
+    '<strong>Vrijstellingen met einddatum:</strong> vul bij een vrijstelling <em>Loopt tot en met</em> in; daarna telt hij niet meer mee (voor de weken ervóór nog wel). Het startscherm meldt een vrijstelling die binnen twee weken afloopt of al verlopen is',
+    '<strong>Gesprek afsluiten</strong> bij Overleggen → Rechters: de besproken punten gaan naar het archief van die rechter, met de datum van het gesprek',
+    'De zwaarte van een kantonzaak kies je nu met knoppen (Eenvoudig · Normaal · Complex), net als B/C/D bij handel',
+    'Opgelost: de aardzaak-vinkjes van een kantonrechter gingen verloren als je die rechter opnieuw in de verdeling zette; ze staan nu ook op de personeelskaart',
+  ]},
   { versie: '2026.10.23', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     '<strong>Zoeken in de handleiding:</strong> bovenin staat een zoekveld; alleen de stukken met je zoekwoord blijven staan, met het woord geel gemarkeerd',
     'Nieuw in de handleiding: een <strong>begrippenlijst</strong> (eFTE, handel-eFTE, punten, MK-bonus, evenredig aandeel, marge, norm en meer)',
@@ -1746,6 +1754,17 @@ function homeRenderAandacht() {
     const n = wvAantalZakenVoor(r.id);
     if (n > 0) alerts.push('⚠️ ' + wvEsc(r.naam) + ': afwezig maar heeft ' + n + ' actieve ' + (n===1?'zaak':'zaken'));
   });
+
+  // Vrijstellingen die (bijna) aflopen
+  const vandaagV = uDatumISO(), over14 = (() => { const d = new Date(); d.setDate(d.getDate() + 14); return uDatumISO(d); })();
+  const kortV = iso => new Date(iso + 'T12:00:00').toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  pkKaarten.forEach(k => (k.vrijstellingen || []).forEach(v => {
+    if (!v.tot) return;
+    const c = v.cat_id ? wvVrijstellingCats.find(c => c.id === v.cat_id) : null;
+    const lbl = (c && c.label) || v.label || 'vrijstelling';
+    if (v.tot < vandaagV) alerts.push('⏰ ' + wvEsc(k.naam) + ': vrijstelling "' + wvEsc(lbl) + '" is verlopen op ' + kortV(v.tot) + ' en telt niet meer mee — verwijder hem op de personeelskaart als hij niet verlengd wordt');
+    else if (v.tot <= over14) alerts.push('⏰ ' + wvEsc(k.naam) + ': vrijstelling "' + wvEsc(lbl) + '" loopt af op ' + kortV(v.tot));
+  }));
 
   // Spreiding: zelfde oordeel als de evenredige verdeling (wvHandelVerdeelData + wvMargeStatus)
   (wvHandelVerdeelData()?.data || []).forEach(d => {
@@ -3259,8 +3278,12 @@ function wvIsAfwezig(r) {
 }
 
 // eFTE zonder de afwezig-kortsluiting (effectieve FTE op basis van contract minus vrijstellingen).
+// Aftrek op een dag: vrijstellingen met een einddatum tellen tot en met die datum
+function wvAftrekOp(r, iso) {
+  return (r.vrijstellingen||[]).filter(v => !v.tot || iso <= v.tot).reduce((s,v)=>s+(parseFloat(v.fte)||0),0);
+}
 function wvEffFTEBasis(r) {
-  const aftrek=(r.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0),0);
+  const aftrek=wvAftrekOp(r, uDatumISO());
   return Math.max(0,(parseFloat(r.fte)||0)-aftrek);
 }
 function wvEffFTE(r) {
@@ -3288,11 +3311,10 @@ function wvWerkdagenTussen(van, tot) {
 // de ingangsdatum van een FTE-wijziging.
 function wvEFteOp(r, iso) {
   if (r.aanstellingsdatum && iso < r.aanstellingsdatum) return 0;
-  if (r.fte_ingangsdatum && r.fte_voor != null && iso < r.fte_ingangsdatum) {
-    const aftrek = (r.vrijstellingen || []).reduce((s, v) => s + (parseFloat(v.fte) || 0), 0);
+  const aftrek = wvAftrekOp(r, iso);
+  if (r.fte_ingangsdatum && r.fte_voor != null && iso < r.fte_ingangsdatum)
     return Math.max(0, (parseFloat(r.fte_voor) || 0) - aftrek);
-  }
-  return wvEffFTEBasis(r);
+  return Math.max(0, (parseFloat(r.fte) || 0) - aftrek);
 }
 // Afwezigheid die meetelt voor de verdeling: periodes van minstens een hele week
 // (5 werkdagen), plus het vinkje "afwezig" vanaf het moment van aanvinken. Een lopende
@@ -3624,6 +3646,10 @@ function wvKantonCatRechterToggle(rid, cid, aan) {
   if (!r.kanton_categorieen) r.kanton_categorieen = [];
   if (aan && !r.kanton_categorieen.includes(cid)) r.kanton_categorieen.push(cid);
   if (!aan) r.kanton_categorieen = r.kanton_categorieen.filter(id => id !== cid);
+  // Ook op de personeelskaart bewaren, zodat de vinkjes blijven als de rechter later
+  // opnieuw in de verdeling wordt gezet
+  const k = pkKaarten.find(k => k.id === r.pk_id);
+  if (k) { k.kanton_categorieen = [...r.kanton_categorieen]; pkOpslaan(); }
   uLog('kanton-cat-rechter-gewijzigd', { aan });
   wvOpslaan(); wvRenderVerdeelRanglijst();
 }
@@ -3692,6 +3718,13 @@ function uKnopKeuzeZet(groepId, waarde) {
     b.setAttribute('aria-pressed', aan ? 'true' : 'false');
   });
 }
+// Zwaarte van een nieuwe kantonzaak: knoppen, net als B/C/D bij handel
+let wvKantonFormZwaarte = 'eenvoudig';
+function wvSetKantonZwaarte(z) {
+  wvKantonFormZwaarte = z;
+  uKnopKeuzeZet('wv-kz-zwaarte', z);
+}
+
 function wvSetZwaarte(z) {
   wvFormZwaarte=z;
   uKnopKeuzeZet('wv-z-zwaarte', z);
@@ -3897,7 +3930,7 @@ function _wvAddKantonZaakDoen(kenmerk) {
   if (!rid) { uLog('validatiefout', { actie: 'kantonzaak-toevoegen', reden: 'geen-rechter' }); uMelding('Selecteer een kantonrechter.', 'info'); return; }
   const zaak = {
     id: wvUid(), kenmerk, gebied: 'kanton', type: 'E',
-    zwaarte: document.getElementById('wv-kz-zwaarte')?.value || 'eenvoudig',
+    zwaarte: wvKantonFormZwaarte || 'eenvoudig',
     categorie: document.getElementById('wv-kz-categorie')?.value || null,
     rechter_id: rid, datum: uDatumISO(),
     notitie: document.getElementById('wv-kz-notitie')?.value.trim() || null,
@@ -3911,7 +3944,7 @@ function _wvAddKantonZaakDoen(kenmerk) {
   uLog('zaak-geregistreerd', { gebied: 'kanton', zwaarte: zaak.zwaarte, aardzaak: !!zaak.categorie });
   document.getElementById('wv-kz-kenmerk').value = '';
   document.getElementById('wv-kz-notitie').value = '';
-  document.getElementById('wv-kz-zwaarte').value = 'eenvoudig';
+  wvSetKantonZwaarte('eenvoudig');
   document.getElementById('wv-kz-categorie').value = '';
   wvRenderKantonZaakSelectors(); wvRenderZakenLijst(); wvRenderOverzicht(); wvRenderVerdeelStatus(); wvRenderVerdeelRanglijst(); wvRenderRechters();
   wvToonFlash(`✓ ${wvEsc(kenmerk)} geregistreerd → ${wvEsc(wvRechterNaam(rid))} (kanton)`);
@@ -5046,7 +5079,8 @@ function wvKantonCatVerwijder(cid) {
     `Wil je aardzaak-categorie <strong>${wvEsc(c?.naam || '')}</strong> verwijderen?${inGebruik ? '<br><br>Let op: er zijn nog actieve zaken met deze categorie — die blijven bestaan maar verliezen het label.' : ''}`,
     () => {
       wvKantonCategorieen = wvKantonCategorieen.filter(c => c.id !== cid);
-      wvRechters.forEach(r => { if (r.kanton_categorieen) r.kanton_categorieen = r.kanton_categorieen.filter(id => id !== cid); });
+      [...wvRechters, ...pkKaarten].forEach(r => { if (r.kanton_categorieen) r.kanton_categorieen = r.kanton_categorieen.filter(id => id !== cid); });
+      pkOpslaan();
       uLog('kanton-cat-verwijderd');
       wvOpslaan(); wvRenderKantonInstellingen(); wvRenderRechters();
     });
@@ -6587,10 +6621,13 @@ function pkVrijstFTE(v) {
 }
 // Alle FTE-aftrek van een teamlid: vrijstellingen én neventaken met een FTE-waarde.
 // Eén bron voor de eFTE op de personeelskaart en in de werklastverdeling.
-function pkAftrekken(k) {
-  const vrij = (k.vrijstellingen||[]).map(v => {
+// Standaard alleen wat vandaag geldt; metVerlopen=true ook verlopen vrijstellingen (met hun
+// einddatum), zodat de werklastverdeling ze voor de weken daarvóór nog meetelt.
+function pkAftrekken(k, metVerlopen) {
+  const vandaag = uDatumISO();
+  const vrij = (k.vrijstellingen||[]).filter(v => metVerlopen || !v.tot || v.tot >= vandaag).map(v => {
     const c = v.cat_id ? wvVrijstellingCats.find(c => c.id === v.cat_id) : null;
-    return { label: (c && c.label) || v.label || '', fte: pkVrijstFTE(v) };
+    return { label: (c && c.label) || v.label || '', fte: pkVrijstFTE(v), tot: v.tot || null };
   });
   const neven = (k.neventaken||[]).map(n => {
     const c = n.cat_id ? pkCategorieen.find(c => c.id === n.cat_id) : null;
@@ -6859,6 +6896,8 @@ function pkEditRij(k) {
           <span style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#a8a29e;display:block;line-height:1.4;">Omvang</span>
           <span style="font-size:12px;">${dispStr}</span>
         </div>
+        <div class="vr-tot"><label title="Optioneel: na deze datum telt de vrijstelling niet meer mee">Loopt tot en met</label>
+        <input type="date" value="${v.tot||''}" onchange="pkUpdateVrijstTot('${k.id}',${i},this.value)"></div>
         <div><label>&nbsp;</label><button class="btn btn-danger" onclick="pkVerwijderVrijst('${k.id}',${i})">×</button></div>
       </div>`;
     }
@@ -6875,7 +6914,9 @@ function pkEditRij(k) {
             <option value="uren"${ee==='uren'?' selected':''}>uur</option>
           </select>
         </div></div>
-      <div><label>&nbsp;</label><button class="btn btn-danger" onclick="pkVerwijderVrijst('${k.id}',${i})">×</button></div>
+      <div class="vr-tot"><label title="Optioneel: na deze datum telt de vrijstelling niet meer mee">Loopt tot en met</label>
+        <input type="date" value="${v.tot||''}" onchange="pkUpdateVrijstTot('${k.id}',${i},this.value)"></div>
+        <div><label>&nbsp;</label><button class="btn btn-danger" onclick="pkVerwijderVrijst('${k.id}',${i})">×</button></div>
     </div>`;
   }).join('');
   const nevenRows = (k.neventaken||[]).map((n,i) => {
@@ -7239,6 +7280,13 @@ function pkUpdateVrijstLabel(kid,idx,val) {
   const k = pkKaarten.find(k=>k.id===kid);
   if (k?.vrijstellingen[idx]!==undefined) { k.vrijstellingen[idx].label=val; pkOpslaan(); }
 }
+function pkUpdateVrijstTot(kid, idx, val) {
+  const v = pkKaarten.find(k => k.id === kid)?.vrijstellingen?.[idx];
+  if (!v) return;
+  v.tot = val || null;
+  uLog('pk-vrijstelling-einddatum', { gezet: !!val });
+  pkOpslaan(); pkRecalc(); pkRenderTotalen && pkRenderTotalen();
+}
 // opslaan=false: tijdens het typen alleen de getallen bijwerken (opslaan gebeurt bij onchange)
 function pkUpdateVrijstWaarde(kid,idx,val,opslaan) {
   const k = pkKaarten.find(k=>k.id===kid);
@@ -7308,12 +7356,14 @@ function pkWerkRechterBij(r, k) {
   const nieuw = {
     naam: (k.naam||'').trim() || r.naam, rol,
     fte: isPlvRio ? r.fte : k.fte,
-    vrijstellingen: isPlvRio ? r.vrijstellingen : pkAftrekken(k),
+    vrijstellingen: isPlvRio ? r.vrijstellingen : pkAftrekken(k, true),
     aanstellingsdatum: k.aanstellingsdatum || null,
     fte_ingangsdatum:  k.fte_ingangsdatum  || null,
     fte_voor:          k.fte_voor ?? null,
     // "Kan als lid deelnemen aan een meervoudige handelkamer" (alleen zinvol zonder handel%)
-    mk_inzetbaar:      !!k.mk_inzetbaar
+    mk_inzetbaar:      !!k.mk_inzetbaar,
+    // Aardzaak-bevoegdheden (kanton) staan op de kaart, zodat ze een her-import overleven
+    kanton_categorieen: [...(k.kanton_categorieen ?? r.kanton_categorieen ?? [])]
   };
   const oud = {};
   Object.keys(nieuw).forEach(veld => { oud[veld] = r[veld] ?? null; });
@@ -7324,6 +7374,11 @@ function pkWerkRechterBij(r, k) {
 // Werkt alle gekoppelde rechters bij (alleen in het geheugen); geeft de gewijzigde namen terug.
 function pkSyncAlleNaarWV() {
   pkKoppelWV();
+  // Oude gegevens: aardzaak-vinkjes stonden alleen op de WV-rechter → eenmalig naar de kaart
+  wvRechters.forEach(r => {
+    const k = r.pk_id && pkKaarten.find(k => k.id === r.pk_id);
+    if (k && !k.kanton_categorieen && (r.kanton_categorieen || []).length) k.kanton_categorieen = [...r.kanton_categorieen];
+  });
   const bijgewerkt = [];
   pkKaarten.forEach(k => {
     const r = wvRechterVoorKaart(k);
@@ -9795,7 +9850,7 @@ function ovRechterKaartHtml(k) {
   const data      = ovRechterData(pkId);
   const isOpen    = ovRechterOpen.has(pkId);
   const open      = data.punten.filter(p => !p.besproken);
-  const besproken = data.punten.filter(p => p.besproken);
+  const besproken = data.punten.filter(p => p.besproken && !p.gesprek_id); // nog niet gearchiveerd
 
   const badge = open.length
     ? `<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;flex-shrink:0">${open.length} punt${open.length === 1 ? '' : 'en'}</span>`
@@ -9882,12 +9937,58 @@ function ovRechterKaartHtml(k) {
         <button class="btn btn-primary" style="padding:5px 12px;font-size:12px" onclick="ovRechterPuntToevoegen('${pkId}')">＋</button>
       </div>
       ${besprokenSectie}
+      ${besproken.length ? `<div style="text-align:right;margin-top:8px;">
+        <button class="btn btn-ghost btn-klein" style="padding:5px 12px;" onclick="ovRechterSluitGesprek('${pkId}')" title="Zet de besproken punten in het archief, met de datum van vandaag">✓ Gesprek afsluiten (${besproken.length} besproken)</button>
+      </div>` : ''}
+      ${ovRechterArchiefHtml(pkId, data)}
     </div>`;
 
   return `<div id="ov-rechter-${pkId}" style="border:1px solid #e7e0d8;border-radius:10px;margin-bottom:8px;overflow:hidden">
     ${headerHtml}${contextHtml}${puntenHtml}
   </div>`;
 }
+
+// Gesprek afsluiten: besproken punten naar het archief van deze rechter, met de datum
+// van vandaag (zoals "Vergadering afsluiten" bij Overleggen)
+function ovRechterSluitGesprek(pkId) {
+  const data = ovRechterData(pkId);
+  const besproken = data.punten.filter(p => p.besproken && !p.gesprek_id);
+  if (!besproken.length) return;
+  uBevestig('Gesprek afsluiten',
+    `${besproken.length} besproken punt${besproken.length === 1 ? '' : 'en'} archiveren als gesprek van vandaag? Openstaande punten blijven staan voor de volgende keer.`,
+    () => {
+      const g = { id: wvUid(), datum: uDatumISO() };
+      (data.gesprekken = data.gesprekken || []).push(g);
+      besproken.forEach(p => { p.gesprek_id = g.id; });
+      ovOpslaan();
+      ovRenderRechterKaart(pkId);
+      uLog('ov-rechter-gesprek-afgesloten', { aantal_punten: besproken.length });
+    }, 'Archiveren', { primair: true });
+}
+function ovRechterArchiefHtml(pkId, data) {
+  const gesprekken = [...(data.gesprekken || [])].sort((a, b) => b.datum.localeCompare(a.datum));
+  if (!gesprekken.length) return '';
+  const open = ovRechterArchiefOpen.has(pkId);
+  return `<div style="background:#f9f7f5;border-top:1px solid #eee;padding:8px 14px;margin:8px -14px 0">
+      <button onclick="ovRechterArchiefOpen.has('${pkId}') ? ovRechterArchiefOpen.delete('${pkId}') : ovRechterArchiefOpen.add('${pkId}'); ovRenderRechterKaart('${pkId}')"
+        style="background:none;border:none;cursor:pointer;font-family:Arial,sans-serif;font-size:12px;color:#aaa;padding:0">
+        ${open ? '▼' : '▶'} Archief — ${gesprekken.length} ${gesprekken.length === 1 ? 'gesprek' : 'gesprekken'}
+      </button>
+      <div style="display:${open ? '' : 'none'};margin-top:8px">
+        ${gesprekken.map(g => `<div style="margin-bottom:12px">
+          <div style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#a8a29e;margin-bottom:4px">Gesprek ${wvEsc(new Date(g.datum + 'T12:00:00').toLocaleDateString('nl-NL', { day:'numeric', month:'long', year:'numeric' }))}</div>
+          ${data.punten.filter(p => p.gesprek_id === g.id).map(p => `
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:3px 0">
+              <span style="color:#ddd;flex-shrink:0;line-height:1.5">–</span>
+              <span style="flex:1;font-family:Arial,sans-serif;font-size:12px;color:#a8a29e">${wvEsc(p.tekst)}</span>
+              <button onclick="ovRechterZetTerug('${pkId}','${p.id}')" title="Terugzetten naar openstaand"
+                style="background:none;border:none;cursor:pointer;font-size:11px;color:#ccc;padding:0;flex-shrink:0">↩</button>
+            </div>`).join('')}
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+const ovRechterArchiefOpen = new Set();
 
 function ovRechterToggle(pkId) {
   ovAutoSaveEditState();
@@ -9940,6 +10041,7 @@ function ovRechterZetTerug(pkId, puntId) {
   if (!p) return;
   p.besproken = false;
   p.besproken_datum = null;
+  delete p.gesprek_id; // ook uit het archief terug naar openstaand
   ovOpslaan();
   ovRenderRechterKaart(pkId);
   uLog('ov-rechter-punt-besproken', { besproken: false });
@@ -11095,7 +11197,7 @@ document.addEventListener('keydown', function(e) {
               <li><p>Vul naam, FTE (bijv. <strong>1,0</strong> voor een volledige aanstelling), aanstellingsjaar en type in.</p></li>
               <li><p>Vink <strong>Handel</strong> en/of <strong>Kanton</strong> aan. Pas zodra je een vinkje zet verschijnt het percentageveld — daarmee leg je vast hoeveel FTE iemand aan dat rechtsgebied besteedt (de percentages hoeven niet op te tellen tot 100%).</p></li>
               <li><p>Doet een rechter <strong>geen handel</strong> (Handel uit)? Dan verschijnt het vinkje <em>"Kan als lid deelnemen aan een meervoudige handelkamer"</em>. Vink dit aan voor kantonrechters die wél als lid in een handel-MK kunnen meedraaien — ze worden dan kiesbaar als MK-lid in de Werklastverdeling.</p></li>
-              <li><p>Voeg vrijstellingen toe: kies er een uit de lijst (vrijstellingscategorieën) of klik op <kbd>+ Vrije invoer</kbd> — bijv. 0,2 FTE voor vakgroepvoorzitter. Vrijstellingen en neventaken met een FTE-waarde verlagen de effectieve FTE.</p></li>
+              <li><p>Voeg vrijstellingen toe: kies er een uit de lijst (vrijstellingscategorieën) of klik op <kbd>+ Vrije invoer</kbd> — bijv. 0,2 FTE voor vakgroepvoorzitter. Vrijstellingen en neventaken met een FTE-waarde verlagen de effectieve FTE. Geldt een vrijstelling maar een tijd (bijvoorbeeld een project)? Vul dan <em>Loopt tot en met</em> in: daarna telt hij niet meer mee, en het startscherm meldt het zodra hij (bijna) afloopt.</p></li>
               <li><p>Klik op <kbd>✓ Klaar</kbd> om op te slaan. Bij een nieuwe rechter vraagt de toolkit daarna of die meteen in de werklastverdeling moet.</p></li>
             </ol>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>De <strong>effectieve FTE</strong> (eff. FTE) wordt automatisch berekend: FTE minus alle vrijstellingen. Dit is het getal dat de Werklastverdeling gebruikt.</span></div>
@@ -11283,6 +11385,7 @@ document.addEventListener('keydown', function(e) {
             <h3>Rechters</h3>
             <p>Op het tabblad <strong>Rechters</strong> houd je per rechter aantekeningen bij voor gesprekken. De lijst komt uit de Personeelskaart (rio's en plaatsvervangers worden niet getoond).</p>
             <p style="margin-top:6px">Klik op een naam om open te klappen. In het <strong>contextveld</strong> noteer je algemene aandachtspunten; daaronder voeg je losse <strong>bespreekpunten</strong> toe (met de datum van vandaag, achteraf aanpasbaar). Vink een punt af met ○ om het naar de inklapbare <em>besproken</em>-sectie te verplaatsen; met ↩ zet je het terug. Klik op de tekst om inline te bewerken.</p>
+            <p style="margin-top:6px"><strong>Gesprek afsluiten:</strong> na het gesprek klik je op <kbd>✓ Gesprek afsluiten</kbd>. De besproken punten gaan dan naar het <strong>Archief</strong> van die rechter, met de datum van het gesprek; met ↩ zet je een punt terug naar openstaand.</p>
           </div>
         </section>
 
