@@ -1142,7 +1142,7 @@
       </div>
       <div class="card" style="margin-bottom:0;">
         <div class="card-title">Belastingdrempel</div>
-        <div class="card-hint">Marge rondom het gemiddelde waarbinnen de belasting als oranje (rond gemiddelde) wordt weergegeven. Daarbuiten: groen of rood.</div>
+        <div class="card-hint">Hoeveel procent iemand van het evenredige aandeel mag afwijken voordat de rij rood (te veel) of groen (ruimte) kleurt. Rood en groen verschijnen pas bij minstens 1,5 punt verschil.</div>
         <div style="display:flex;flex-wrap:nowrap;gap:16px;align-items:flex-end;">
           <div class="field" style="max-width:160px;margin-bottom:0;"><label>Marge (%)</label><input type="number" id="wv-belasting-marge" min="1" max="50" step="1" onchange="wvUpdateBelastingMarge(this.value)"></div>
           <div class="field" style="margin-bottom:0;"><label>Kleur onder gem.</label><input type="color" id="wv-kleur-onder" oninput="wvUpdateBelastingKleur('onder',this.value)" style="width:44px;height:32px;padding:2px;cursor:pointer;border:1px solid #d6d3d1;border-radius:4px;"></div>
@@ -1318,8 +1318,14 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.22';
+const TOOLKIT_VERSIE = '2026.10.23';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.23', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
+    '<strong>Zoeken in de handleiding:</strong> bovenin staat een zoekveld; alleen de stukken met je zoekwoord blijven staan, met het woord geel gemarkeerd',
+    'Nieuw in de handleiding: een <strong>begrippenlijst</strong> (eFTE, handel-eFTE, punten, MK-bonus, evenredig aandeel, marge, norm en meer)',
+    'De handleiding is bijgewerkt waar knoppen en stappen anders zijn gaan heten (opstarten, personeelskaart, prullenbak, overleggen, belastingdrempel)',
+    'Sneller, vooral met een databestand op Teams of een netwerkschijf: tijdens het typen van een FTE-waarde wordt pas opgeslagen als je het veld verlaat, Inzicht en Verdelen rekenen de verdeling nog maar één keer uit, en het gebruikslogboek wordt gebundeld opgeslagen',
+  ]},
   { versie: '2026.10.22', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     'De <strong>navigatiebalk</strong> blijft altijd op één regel en verspringt niet meer. Op een kleiner scherm tonen de knoppen alleen hun icoon (de naam zie je als je erop wijst), zodat er nooit iets buiten beeld valt',
     'Overal dezelfde naam voor het in de verdeling zetten van teamleden: <strong>＋ Verdeling</strong> en <strong>＋ Heel team naar de verdeling</strong>',
@@ -1502,12 +1508,55 @@ const TOOLKIT_CHANGELOG = [
 function uHandleidingOpen(sectie) {
   const el = document.getElementById('handleiding-overlay');
   if (el) el.style.display = 'block';
+  const zoek = document.getElementById('hdl-zoek');
+  if (zoek && zoek.value) { zoek.value = ''; hdlZoek(''); }
   if (sectie) setTimeout(() => hdlScrollTo(sectie), 80);
 }
 function uHandleidingSluit() {
   const el = document.getElementById('handleiding-overlay');
   if (el) el.style.display = 'none';
 }
+// Zoeken in de handleiding: alleen de stukken (kaarten) met het zoekwoord blijven staan,
+// met het woord gemarkeerd. Leeg zoekveld = alles weer zichtbaar.
+const _hdlOrigineel = new Map();
+function hdlZoek(term) {
+  const q = (term || '').trim().toLowerCase();
+  const main = document.getElementById('hdl-main');
+  if (!main) return;
+  let n = 0;
+  main.querySelectorAll('section').forEach(sec => {
+    let secZichtbaar = !q;
+    sec.querySelectorAll('.hdl-card').forEach(card => {
+      if (!_hdlOrigineel.has(card)) _hdlOrigineel.set(card, card.innerHTML);
+      card.innerHTML = _hdlOrigineel.get(card);
+      const past = !q || card.textContent.toLowerCase().includes(q);
+      card.style.display = past ? '' : 'none';
+      if (q && past) { n++; secZichtbaar = true; hdlMarkeer(card, q); }
+    });
+    sec.style.display = secZichtbaar ? '' : 'none';
+  });
+  const tel = document.getElementById('hdl-zoek-tel');
+  if (tel) tel.textContent = !q ? '' : n ? `${n} ${n === 1 ? 'stuk' : 'stukken'} gevonden` : 'niets gevonden';
+  if (q) main.scrollTop = 0;
+}
+function hdlMarkeer(el, q) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) if (walker.currentNode.nodeValue.toLowerCase().includes(q)) nodes.push(walker.currentNode);
+  nodes.forEach(node => {
+    const tekst = node.nodeValue, laag = tekst.toLowerCase();
+    const frag = document.createDocumentFragment();
+    let i = 0, j;
+    while ((j = laag.indexOf(q, i)) !== -1) {
+      if (j > i) frag.appendChild(document.createTextNode(tekst.slice(i, j)));
+      const m = document.createElement('mark'); m.className = 'hdl-treffer'; m.textContent = tekst.slice(j, j + q.length);
+      frag.appendChild(m); i = j + q.length;
+    }
+    if (i < tekst.length) frag.appendChild(document.createTextNode(tekst.slice(i)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+
 function hdlScrollTo(id) {
   const el = document.getElementById('hdl-' + id);
   const main = document.getElementById('hdl-main');
@@ -2131,7 +2180,7 @@ function _showView(name, btn) {
   document.getElementById('app-title').textContent = VIEW_TITLES[name] || name;
   updateAppHeaderRight(name);
   uLog('view-geopend', { view: name });
-  if (name === 'home') { wvAutoSnapshot(); homeRender(); }
+  if (name === 'home') wvVerdeelCacheTijdens(() => { wvAutoSnapshot(); homeRender(); });
   if (name === 'weekpost') {
     wpRenderNotities();
     wpBasisZetStand(); wpRenderBasis();
@@ -3180,12 +3229,16 @@ function uLogSchrijfNaarBestand() {
   }, 2000);
 }
 
+let _uLogTimer = null;
+function uLogBewaar() { clearTimeout(_uLogTimer); _uLogTimer = null; lsZet(U_KEY, JSON.stringify(uGebruiksLog)); }
 function uLog(actie, detail = {}) {
   uGebruiksLog.push({ ts: new Date().toISOString(), actie, detail });
   if (uGebruiksLog.length > U_MAX) uGebruiksLog.splice(0, uGebruiksLog.length - U_MAX);
-  lsZet(U_KEY, JSON.stringify(uGebruiksLog));
+  // Gebundeld wegschrijven (de lijst kan groot zijn); bij sluiten van het tabblad direct
+  if (!_uLogTimer) _uLogTimer = setTimeout(uLogBewaar, 3000);
   uLogSchrijfNaarBestand();
 }
+window.addEventListener('pagehide', () => { if (_uLogTimer) uLogBewaar(); });
 
 function uLogLaden() {
   try { const v = localStorage.getItem(U_KEY); if (v) uGebruiksLog = JSON.parse(v); } catch(e) {}
@@ -4205,7 +4258,7 @@ function _wvAddZaakDoen(kenmerk) {
 function wvZaakRijHtml(z, archief, highlightRid = null) {
   const g=zaakGewichtVan(z);
   const myRol=(highlightRid&&z.type==='MK')?(highlightRid===z.vz_id?'VZ':highlightRid===z.l1_id?'L1':'L2'):null;
-  const myPt=myRol?(myRol==='VZ'?g+wvMkVzBonus:g):null;
+  const myPt=myRol?zaakBijdrageVoor(z, highlightRid):null;
   const mkLeden=z.type==='MK'?[z.l1_id,z.l2_id].filter(Boolean):[];
   const mkOnvolledig=z.type==='MK'&&mkLeden.length<2;
   const ledenTekst=mkLeden.length?mkLeden.map(id=>wvEsc(wvRechterNaam(id))).join(', '):'<em>nog geen leden</em>';
@@ -4496,9 +4549,9 @@ function wvRenderOverzicht() {
     <tfoot><tr><td>Totaal</td><td></td><td style="text-align:center;">${totEFTE.toFixed(2).replace('.',',')}</td><td style="text-align:center;white-space:nowrap;">${totBCD.B}&thinsp;/&thinsp;${totBCD.C}&thinsp;/&thinsp;${totBCD.D}</td><td style="text-align:center;">${totPunten.toFixed(1).replace('.',',')}</td><td style="text-align:center;" title="Norm: zoals in de ranglijst">${gemInt}</td><td></td></tr></tfoot>
   </table></div>
   <p style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;margin-top:10px;">
-    Balk: <span style="color:${wvKleurOnder};font-weight:600;">■</span> = onder gemiddelde &nbsp;·&nbsp;
-    <span style="color:${wvKleurRond};font-weight:600;">■</span> = rond gemiddelde (±${Math.round(wvBelastingMarge*100)}%) &nbsp;·&nbsp;
-    <span style="color:${wvKleurBoven};font-weight:600;">■</span> = boven gemiddelde &nbsp;·&nbsp;
+    Balk: <span style="color:${wvKleurOnder};font-weight:600;">■</span> = ruimte (onder het evenredige aandeel) &nbsp;·&nbsp;
+    <span style="color:${wvKleurRond};font-weight:600;">■</span> = rond het evenredige aandeel (±${Math.round(wvBelastingMarge*100)}%) &nbsp;·&nbsp;
+    <span style="color:${wvKleurBoven};font-weight:600;">■</span> = te veel (boven het evenredige aandeel) &nbsp;·&nbsp;
     MK-voorzitter telt voor zaakgewicht + ${wvMkVzBonus} pt extra.
   </p>${(()=>{const pr=wvRechters.filter(r=>r.rol==='rio'||r.rol==='plaatsvervanger');return pr.length?`<p style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;margin-top:4px;">Rio's en plaatsvervangers (${pr.map(r=>wvEsc(r.naam)).join(', ')}) zijn niet in dit overzicht opgenomen.</p>`:'';})()}
 `;
@@ -6131,7 +6184,8 @@ function wvTab(naam, el) {
 }
 
 // Render-helpers voor de samengevoegde tabs
-function wvRenderInzicht() {
+function wvRenderInzicht() { wvVerdeelCacheTijdens(_wvRenderInzicht); }
+function _wvRenderInzicht() {
   wvAutoSnapshot();
   wvGebiedSchakelaarRender();
   wvRenderInzichtMeldingen();
@@ -6140,7 +6194,8 @@ function wvRenderInzicht() {
   wvRenderVerdeelHistorie();
   wvRenderHistorie();
 }
-function wvRenderVerdelen() {
+function wvRenderVerdelen() { wvVerdeelCacheTijdens(_wvRenderVerdelen); }
+function _wvRenderVerdelen() {
   wvGebiedSchakelaarRender();
   wvRenderVerdeelStatus();
   const fh = document.getElementById('wv-form-handel');
@@ -6163,8 +6218,8 @@ function wvInjectBelastingKleuren() {
 
 function wvRenderAll() {
   wvInjectBelastingKleuren();
-  wvAutoSnapshot();
   wvVerdeelCacheTijdens(() => {
+    wvAutoSnapshot();
     wvRenderRechters(); wvRenderVerdeelStatus(); wvRenderZaakSelectors(); wvRenderZakenLijst();
     wvRenderInzicht(); wvRenderInstellingen();
     homeRender();
@@ -6814,7 +6869,7 @@ function pkEditRij(k) {
         <input type="text" value="${wvEsc(v.label)}" placeholder="bijv. OR-lid" onchange="pkUpdateVrijstLabel('${k.id}',${i},this.value)"></div>
       <div class="vr-fte"><label>Omvang</label>
         <div style="display:flex;gap:4px;align-items:center;">
-          <input type="number" value="${dv}" min="0" max="${ee==='uren'?40:2}" step="${ee==='uren'?0.5:0.05}" style="flex:1;min-width:50px;" oninput="pkUpdateVrijstWaarde('${k.id}',${i},this.value)">
+          <input type="number" value="${dv}" min="0" max="${ee==='uren'?40:2}" step="${ee==='uren'?0.5:0.05}" style="flex:1;min-width:50px;" oninput="pkUpdateVrijstWaarde('${k.id}',${i},this.value,false)" onchange="pkUpdateVrijstWaarde('${k.id}',${i},this.value)">
           <select onchange="pkUpdateVrijstEenheid('${k.id}',${i},this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #d4cfc8;border-radius:4px;background:#fff;width:46px;">
             <option value="fte"${ee==='fte'?' selected':''}>FTE</option>
             <option value="uren"${ee==='uren'?' selected':''}>uur</option>
@@ -6844,7 +6899,7 @@ function pkEditRij(k) {
       <div class="vr-lbl"><label>Omschrijving</label>
         <input type="text" value="${wvEsc(n.label)}" placeholder="bijv. werkgroep" onchange="pkUpdateNevenLabel('${k.id}',${i},this.value)"></div>
       <div class="vr-fte"><label style="white-space:nowrap;">Tijdsbeslag <span style="font-weight:normal;color:#a8a29e;">(FTE, opt.)</span></label>
-        <input type="number" value="${n.fte||''}" placeholder="0" min="0" max="1" step="0.05" oninput="pkUpdateNevenFTE('${k.id}',${i},this.value)"></div>
+        <input type="number" value="${n.fte||''}" placeholder="0" min="0" max="1" step="0.05" oninput="pkUpdateNevenFTE('${k.id}',${i},this.value,false)" onchange="pkUpdateNevenFTE('${k.id}',${i},this.value)"></div>
       <div><label>&nbsp;</label><button class="btn btn-danger" onclick="pkVerwijderNeven('${k.id}',${i})">×</button></div>
     </div>`;
   }).join('');
@@ -7184,7 +7239,8 @@ function pkUpdateVrijstLabel(kid,idx,val) {
   const k = pkKaarten.find(k=>k.id===kid);
   if (k?.vrijstellingen[idx]!==undefined) { k.vrijstellingen[idx].label=val; pkOpslaan(); }
 }
-function pkUpdateVrijstWaarde(kid,idx,val) {
+// opslaan=false: tijdens het typen alleen de getallen bijwerken (opslaan gebeurt bij onchange)
+function pkUpdateVrijstWaarde(kid,idx,val,opslaan) {
   const k = pkKaarten.find(k=>k.id===kid);
   const v = k?.vrijstellingen[idx];
   if (!v) return;
@@ -7195,7 +7251,8 @@ function pkUpdateVrijstWaarde(kid,idx,val) {
     v.fte  = Math.max(0, parseFloat(val)||0);
     v.uren = null;
   }
-  pkOpslaan(); pkRecalc();
+  if (opslaan !== false) pkOpslaan();
+  pkRecalc();
 }
 function pkUpdateVrijstEenheid(kid,idx,eenheid) {
   const k = pkKaarten.find(k=>k.id===kid);
@@ -7222,9 +7279,9 @@ function pkUpdateNevenLabel(kid,idx,val) {
   const k = pkKaarten.find(k=>k.id===kid);
   if (k?.neventaken[idx]!==undefined) { k.neventaken[idx].label=val; pkOpslaan(); }
 }
-function pkUpdateNevenFTE(kid,idx,val) {
+function pkUpdateNevenFTE(kid,idx,val,opslaan) {
   const k = pkKaarten.find(k=>k.id===kid);
-  if (k?.neventaken[idx]!==undefined) { k.neventaken[idx].fte=Math.max(0,parseFloat(val)||0); pkOpslaan(); pkRecalc(); }
+  if (k?.neventaken[idx]!==undefined) { k.neventaken[idx].fte=Math.max(0,parseFloat(val)||0); if (opslaan !== false) pkOpslaan(); pkRecalc(); }
 }
 
 // ── Personeelskaart → werklastverdeling: één plek voor koppelen en bijwerken ──
@@ -10853,6 +10910,13 @@ document.addEventListener('keydown', function(e) {
 #handleiding-overlay .hdl-header h1{font-family:Georgia,serif;font-size:20px;font-weight:bold;margin:0;padding:0;}
 #handleiding-overlay .hdl-close{background:none;border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.75);font-family:Arial,sans-serif;font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer;}
 #handleiding-overlay .hdl-close:hover{color:#f59e0b;border-color:#f59e0b;}
+#handleiding-overlay .hdl-zoek{flex:1;display:flex;align-items:center;gap:10px;margin:0 24px;max-width:420px;}
+#handleiding-overlay .hdl-zoek input{flex:1;font-family:Arial,sans-serif;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#fdf8f0;outline:none;}
+#handleiding-overlay .hdl-zoek input::placeholder{color:rgba(255,255,255,0.5);}
+#handleiding-overlay #hdl-zoek-tel{font-family:Arial,sans-serif;font-size:11px;color:rgba(255,255,255,0.6);white-space:nowrap;}
+#handleiding-overlay mark.hdl-treffer{background:#fde68a;color:inherit;padding:0 1px;border-radius:2px;}
+#handleiding-overlay .hdl-begrip dt{font-family:Arial,sans-serif;font-weight:700;font-size:13px;color:#1c1917;margin-top:10px;}
+#handleiding-overlay .hdl-begrip dd{margin:2px 0 0 0;font-family:Arial,sans-serif;font-size:13px;color:#57534e;line-height:1.6;}
 #handleiding-overlay .hdl-body{flex:1;overflow:hidden;display:flex;min-height:0;}
 #handleiding-overlay .hdl-sidebar{width:200px;flex-shrink:0;background:#fff;border-right:1px solid #e7e0d8;overflow-y:auto;padding:16px 0;}
 #handleiding-overlay .hdl-sidebar a{display:block;padding:7px 18px;font-family:Arial,sans-serif;font-size:12px;color:#57534e;text-decoration:none;border-left:3px solid transparent;cursor:pointer;}
@@ -10896,6 +10960,10 @@ document.addEventListener('keydown', function(e) {
         <div class="hdl-header-label">Teamvoorzitter toolkit</div>
         <h1>Gebruikshandleiding</h1>
       </div>
+      <div class="hdl-zoek">
+        <input id="hdl-zoek" type="search" placeholder="🔍 Zoek in de handleiding…" oninput="hdlZoek(this.value)" autocomplete="off">
+        <span id="hdl-zoek-tel"></span>
+      </div>
       <button class="hdl-close" onclick="uHandleidingSluit()">× Sluiten</button>
     </div>
     <div class="hdl-body">
@@ -10912,6 +10980,7 @@ document.addEventListener('keydown', function(e) {
         <a onclick="hdlScrollTo('overleggen')">🗓 Overleggen &amp; Taken</a>
         <div class="hdl-nav-section">Overig</div>
         <a onclick="hdlScrollTo('prullenbak')">🗑️ Prullenbak</a>
+        <a onclick="hdlScrollTo('begrippen')">📚 Begrippenlijst</a>
         <a onclick="hdlScrollTo('valkuilen')">Valkuilen</a>
       </nav>
       <main class="hdl-main" id="hdl-main">
@@ -10934,7 +11003,7 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>Eerste keer opstarten: de rondleiding</h3>
-            <p>Bij het allereerste gebruik start een korte <strong>rondleiding</strong>. Daarin maak je je databestand aan (al je gegevens worden in dit JSON-bestand opgeslagen — niet in de browser) en stel je in na hoeveel dagen de toolkit je aan een backup herinnert. Heb je al een databestand, kies dan <kbd>📂 Ik heb al een databestand</kbd>.</p>
+            <p>Bij het allereerste gebruik start een korte <strong>rondleiding</strong>. Daarin maak je je databestand aan (al je gegevens worden in dit bestand opgeslagen; de browser houdt alleen een reservekopie bij) en stel je in na hoeveel dagen de toolkit je aan een backup herinnert. Heb je al een databestand, kies dan <kbd>📂 Ik heb al een databestand</kbd>.</p>
             <p><button class="btn btn-outline" style="font-size:12px;" onclick="welkomOpnieuw()">👋 Rondleiding opnieuw bekijken</button></p>
             <p>In de rondleiding kies je ook welke <strong>onderdelen</strong> je gebruikt: de Weekpost en de Kantonverdeling kun je aan- of uitzetten. Later aanpassen doe je met <kbd>⚙ Onderdelen</kbd> op het startscherm. Uitzetten gooit niets weg.</p>
             <p>Zo maak je het databestand aan:</p>
@@ -10947,13 +11016,10 @@ document.addEventListener('keydown', function(e) {
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>Bewaar het databestand en je backups in <strong>dezelfde map</strong>, bijv. in een Teams- of netwerkmap. Dan heb je alles bij elkaar en kun je makkelijk een backup maken van die hele map.</span></div>
           </div>
           <div class="hdl-card">
-            <h3>Volgende keer opstarten: bestaand bestand koppelen</h3>
-            <ol class="hdl-steps">
-              <li><p>Klik op <kbd>📁 Bestaand bestand openen</kbd> in het startscherm.</p></li>
-              <li><p>Navigeer naar de map waar je het bestand eerder hebt opgeslagen.</p></li>
-              <li><p>Selecteer het JSON-bestand en klik op Openen.</p></li>
-            </ol>
-            <div class="hdl-warn"><span class="hdl-tip-icon">⚠️</span><span>Browser-beveiliging vereist dat je het bestand elke sessie opnieuw koppelt. Je kunt de toolkit ook zonder bestand gebruiken via <kbd>Verder zonder bestand</kbd>, maar dan sla je data alleen tijdelijk op in de browser — dit gaat verloren als je de cache wist.</span></div>
+            <h3>Volgende keer opstarten</h3>
+            <p>Meestal opent de toolkit je databestand vanzelf. Vraagt de browser opnieuw om toestemming, dan toont het opstartvenster één knop met de naam van je bestand: klik erop en bevestig.</p>
+            <p>Op een andere computer of in een andere browser kies je <kbd>📂 Bestaand databestand openen</kbd>, ga je naar de map met je bestand en klik je op Openen.</p>
+            <div class="hdl-warn"><span class="hdl-tip-icon">⚠️</span><span>Je kunt de toolkit ook zonder bestand gebruiken via <kbd>Zonder bestand doorgaan</kbd>, maar dan sla je data alleen tijdelijk op in de browser — dit gaat verloren als je de cache wist.</span></div>
           </div>
           <div class="hdl-card">
             <h3>De aanbevolen workflow</h3>
@@ -11029,8 +11095,8 @@ document.addEventListener('keydown', function(e) {
               <li><p>Vul naam, FTE (bijv. <strong>1,0</strong> voor een volledige aanstelling), aanstellingsjaar en type in.</p></li>
               <li><p>Vink <strong>Handel</strong> en/of <strong>Kanton</strong> aan. Pas zodra je een vinkje zet verschijnt het percentageveld — daarmee leg je vast hoeveel FTE iemand aan dat rechtsgebied besteedt (de percentages hoeven niet op te tellen tot 100%).</p></li>
               <li><p>Doet een rechter <strong>geen handel</strong> (Handel uit)? Dan verschijnt het vinkje <em>"Kan als lid deelnemen aan een meervoudige handelkamer"</em>. Vink dit aan voor kantonrechters die wél als lid in een handel-MK kunnen meedraaien — ze worden dan kiesbaar als MK-lid in de Werklastverdeling.</p></li>
-              <li><p>Voeg vrijstellingen toe via <kbd>+ Vrijstelling</kbd> — bijv. 0,2 FTE voor vakgroepvoorzitter. Vrijstellingen tellen altijd mee in de berekening.</p></li>
-              <li><p>Klik op <kbd>Klaar</kbd> om op te slaan.</p></li>
+              <li><p>Voeg vrijstellingen toe: kies er een uit de lijst (vrijstellingscategorieën) of klik op <kbd>+ Vrije invoer</kbd> — bijv. 0,2 FTE voor vakgroepvoorzitter. Vrijstellingen en neventaken met een FTE-waarde verlagen de effectieve FTE.</p></li>
+              <li><p>Klik op <kbd>✓ Klaar</kbd> om op te slaan. Bij een nieuwe rechter vraagt de toolkit daarna of die meteen in de werklastverdeling moet.</p></li>
             </ol>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>De <strong>effectieve FTE</strong> (eff. FTE) wordt automatisch berekend: FTE minus alle vrijstellingen. Dit is het getal dat de Werklastverdeling gebruikt.</span></div>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span>Een rechter die handel doet (Handel aangevinkt) is automatisch al kiesbaar als MK-lid; het aparte vinkje is dan niet nodig en verdwijnt.</span></div>
@@ -11058,7 +11124,7 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>Teamlid bewerken of verwijderen</h3>
-            <p>Klik op de naam of het bewerkpictogram om een kaart te openen. Klik op <kbd>Verwijderen</kbd> om een teamlid te verwijderen — het teamlid gaat dan 14 dagen naar de prullenbak.</p>
+            <p>Klik op de naam om de personeelskaart te bekijken, of op ✏️ om hem te bewerken. Met ✕ verwijder je een teamlid — het gaat dan 14 dagen naar de prullenbak.</p>
           </div>
         </section>
 
@@ -11158,7 +11224,7 @@ document.addEventListener('keydown', function(e) {
             <h3>Instellingen</h3>
             <p><strong>Zaakgewichten</strong> — standaard B=1, C=1,5, D=2. Pas aan als de teamafspraken afwijken.</p>
             <p><strong>MK-VZ bonus</strong> — de voorzitter van een meervoudige kamer krijgt standaard 0,5 punt extra bovenop het zaakgewicht.</p>
-            <p><strong>Belastingdrempel</strong> — stel in wanneer een rechter als "rond gemiddelde" of "boven gemiddelde" wordt gemarkeerd. De kleur van de belastingbalken is instelbaar.</p>
+            <p><strong>Belastingdrempel</strong> — de marge rond het evenredige aandeel (standaard ±15%). Wie daarbuiten valt én minstens 1,5 punt afwijkt, kleurt rood (te veel) of groen (ruimte). De kleuren zijn instelbaar.</p>
           </div>
         </section>
 
@@ -11207,7 +11273,7 @@ document.addEventListener('keydown', function(e) {
           <div class="hdl-card">
             <h3>Taken</h3>
             <p>Gebruik de tab <strong>Taken</strong> voor de volledige takenlijst. Je kunt ook direct taken zien en afvinken binnen een uitklapbaar overlegitem.</p>
-            <p style="margin-top:6px"><strong>Bewerken:</strong> klik op de tekst van een taak om tekst en overleg-label inline aan te passen. Enter of klik buiten om op te slaan, Escape of ✕ om te annuleren.</p>
+            <p style="margin-top:6px"><strong>Bewerken:</strong> klik op de tekst van een taak om tekst, overleg-label en deadline aan te passen. Enter of klik buiten de regel om op te slaan, Escape of ✕ om te annuleren. Met <kbd>↑ deadline</kbd> zet je de open taken op volgorde van deadline. Open taken kun je ook op het startscherm afvinken (met ongedaan maken).</p>
             <p style="margin-top:6px"><strong>Herordenen:</strong> gebruik ▲▼ knoppen of sleep via het ⠿-icoon. Het teller-cijfer op de navigatieknop toont het aantal open taken.</p>
             <p style="margin-top:6px"><strong>Verwijderen:</strong> de prullenbak verwijdert een taak of bespreekpunt direct. Onderin verschijnt een paar seconden de knop <kbd>Ongedaan maken</kbd> als je je vergist.</p>
             <p style="margin-top:6px"><strong>Deadline:</strong> klik op <kbd>＋ deadline</kbd> naast het label om een datumveld te tonen en optioneel een deadline in te stellen. Verlopen deadlines zijn rood, deadlines van vandaag amber. Klik <strong>📋</strong> in de filterbalk om open taken naar het klembord te kopiëren.</p>
@@ -11286,18 +11352,47 @@ document.addEventListener('keydown', function(e) {
           <div class="hdl-section-header"><span class="hdl-section-icon">🗑️</span><span class="hdl-section-title">Prullenbak</span></div>
           <div class="hdl-card">
             <h3>Hoe werkt de prullenbak?</h3>
-            <p>Verwijderde rechters, zaken en teamleden worden niet direct permanent gewist. Ze gaan eerst 14 dagen naar de prullenbak. Daarna worden ze automatisch verwijderd.</p>
+            <p>Verwijderde zaken en teamleden worden niet direct permanent gewist. Ze gaan eerst 14 dagen naar de prullenbak. Daarna worden ze automatisch verwijderd.</p>
             <div class="hdl-groen"><span class="hdl-tip-icon">✅</span><span>Je kunt per abuis verwijderde items makkelijk terugzetten vanuit de prullenbak.</span></div>
           </div>
           <div class="hdl-card">
             <h3>Item terugzetten</h3>
             <p>De prullenbak vind je onderaan de relevante tab:</p>
             <ul class="hdl-list">
-              <li><strong>Werklastverdeling → Rechters</strong>: scroll naar beneden voor prullenbak rechters</li>
               <li><strong>Werklastverdeling → Zaken → Afsluiten</strong>: scroll naar beneden voor prullenbak zaken</li>
               <li><strong>Personeelskaart</strong>: scroll naar beneden voor prullenbak teamleden</li>
             </ul>
             <p>Klik op <kbd>Terugzetten</kbd> naast het item om het te herstellen.</p>
+          </div>
+        </section>
+
+        <section id="hdl-begrippen">
+          <div class="hdl-section-header"><span class="hdl-section-icon">📚</span><span class="hdl-section-title">Begrippenlijst</span></div>
+          <div class="hdl-card">
+            <dl class="hdl-begrip">
+              <dt>FTE en eFTE (effectieve FTE)</dt>
+              <dd>FTE is de omvang van het contract (1,0 = voltijd). De <strong>eFTE</strong> is wat overblijft voor zaken: FTE min vrijstellingen en neventaken met een FTE-waarde.</dd>
+              <dt>Handel-eFTE en kanton-eFTE</dt>
+              <dd>De eFTE maal het handel- of kantonpercentage op de personeelskaart. Iemand met 0,9 eFTE en 60% handel heeft 0,54 handel-eFTE.</dd>
+              <dt>Zwaarte en punten</dt>
+              <dd>Elke zaak krijgt een zwaarte: B (eenvoudig), C (gemiddeld) of D (zwaar). Standaard is dat 1, 1,5 en 2 punten (aan te passen bij Instellingen). Bij een meervoudige kamer krijgt elk lid de punten van de zaak.</dd>
+              <dt>MK-voorzitter bonus</dt>
+              <dd>De voorzitter van een meervoudige kamer krijgt extra punten bovenop het zaakgewicht (standaard 0,5), voor het extra werk.</dd>
+              <dt>Evenredig (eerlijk) aandeel</dt>
+              <dd>Hoeveel punten een rechter op grond van zijn of haar handel-eFTE zou hebben als alle openstaande zaken precies eerlijk verdeeld waren — per week berekend, rekening houdend met afwezigheid van een week of langer, aanstellingsdatum en FTE-wijzigingen.</dd>
+              <dt>Afwijking en marge</dt>
+              <dd>Het verschil tussen de punten die iemand heeft en het evenredige aandeel, in procenten. De <strong>marge</strong> (standaard ±15%) bepaalt wanneer een rij rood (te veel) of groen (ruimte) kleurt — en alleen bij minstens 1,5 punt verschil.</dd>
+              <dt>Norm (pt per eFTE)</dt>
+              <dd>Het totaal aan punten gedeeld door de totale handel-eFTE van het team: hoeveel punten er gemiddeld op één voltijdse rechter liggen.</dd>
+              <dt>Verdeling (week) en Week afronden</dt>
+              <dd>Tijdens een verdeling registreer je de nieuwe zaken van die week. Met <em>Week afronden</em> leg je de instroom van die week vast voor de grafieken.</dd>
+              <dt>Instroom en uitstroom</dt>
+              <dd>Instroom: de zaken die per week binnenkwamen. Uitstroom: de zaken die je hebt afgesloten (los of via een CSV-batch).</dd>
+              <dt>Snapshot</dt>
+              <dd>Een momentopname van de verdeling. De toolkit legt er automatisch één per week vast; je kunt er ook zelf een opslaan.</dd>
+              <dt>Schrijfkast</dt>
+              <dd>Het aantal open dossiers bij de juristen, per categorie. Je vult het in de weekpost in (of met de hand bij Werkvoorraad); de werkvoorraad toont het verloop.</dd>
+            </dl>
           </div>
         </section>
 
