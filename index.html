@@ -1298,8 +1298,18 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.17';
+const TOOLKIT_VERSIE = '2026.10.18';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.18', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
+    '<strong>Eerlijker evenredige verdeling.</strong> Elke openstaande zaak telt nu mee in de week waarin hij is toegedeeld, en de punten van die week worden verdeeld over wie er toen werkte. Daardoor zijn een aantal fouten verdwenen die de ranglijst scheeftrokken. Let op: waar afwezigheid, een nieuwe collega of een FTE-wijziging speelde, verschuift de ranglijst eenmalig (ook de snapshot-trend maakt in deze week een sprong)',
+    'Een geplande afwezigheid verandert de stand niet meer (één vrije dag morgen gaf iemand vandaag ten onrechte +67%). In de ranglijst en bij het advies zie je alleen een hint, bijv. <em>"🏖 afwezig vanaf 9 nov (2 wk)"</em>',
+    'Afwezigheid van <strong>minstens een hele week</strong> in het verleden verlaagt het eerlijke aandeel over die weken: wie terugkomt hoeft niets in te halen. Kortere afwezigheid verandert de verdeling niet',
+    'Het vinkje <strong>afwezig</strong> geldt nu vanaf het moment van aanvinken; bij uitvinken wordt het vanzelf een gewone periode met datums',
+    'Het advies slaat iedereen over die vandaag afwezig is; afwezigen blijven wel zichtbaar in de ranglijst',
+    'Het <strong>handelpercentage</strong> van de personeelskaart telt nu mee: iemand met 60% handel krijgt 60% van een handelaandeel (en het kantonpercentage voor kanton)',
+    'Een nieuwe collega of een FTE-wijziging met ingangsdatum telt pas mee vanaf die datum; de anderen staan daardoor niet meer onterecht "boven"',
+    'Ranglijst, startscherm, teamoverzicht, snapshots, jaarrapport en Excel gebruiken nu overal dezelfde eFTE',
+  ]},
   { versie: '2026.10.17', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     '<strong>Veiliger opslaan.</strong> Na een grote controle van de toolkit zijn alle gevonden manieren gedicht waarop gegevens verloren konden gaan of overschreven konden worden',
     'Opgelost: werkte je vooral in Overleggen &amp; Taken of aan de weekpost, dan kon het opslaan in het databestand vanaf de tweede keer openen stilletjes worden geweigerd',
@@ -1833,7 +1843,7 @@ function _homeRender() {
   if (pkKaarten.length&&totFte>0&&ovPct>40) capAlert=`⚠️ Overhead hoog: ${ovPct}% van contract-FTE`;
 
   // Widget 4 — Intensiteit
-  // Zelfde norm als in de ranglijst (pt per eFTE, gewogen naar beschikbaarheid)
+  // Zelfde norm als in de ranglijst (pt per handel-eFTE)
   const _intVd = wvHandelVerdeelData();
   const intensiteit = _intVd && _intVd.totEFte>0 ? _intVd.totPt/_intVd.totEFte : null;
   const intHoofd = intensiteit!==null ? intensiteit.toFixed(2).replace('.',',') : '—';
@@ -3111,67 +3121,133 @@ function wvEffFTE(r) {
   return wvEffFTEBasis(r);
 }
 
-// ── Beschikbaarheid over de verdeel-horizon ─────────────────────
-// Horizon = vanaf vandaag tot de laatste einddatum van alle ingevoerde afwezigheidsperiodes
-// van het team. Geen (lopende/toekomstige) periodes → null → geen weging (gedrag als voorheen).
-function wvVerdeelHorizon() {
-  const van = uDatumISO();
-  let tot = null;
-  for (const r of wvRechters) {
-    if (r.rol && r.rol !== 'rechter') continue;
-    for (const p of (r.afwezigPeriodes || [])) {
-      if (p.tot && p.tot >= van && (!tot || p.tot > tot)) tot = p.tot;
+// ── Bouwstenen van de evenredige verdeling (eerlijk aandeel per week) ──────
+// Handel-eFTE vandaag: effectieve FTE (contract − vrijstellingen − neventaken) × handel%.
+function wvHandelPct(r) {
+  const k = pkKaartVoorRechter(r);
+  return k ? (parseFloat(k.handel_pct) || 0) / 100 : 1;
+}
+function wvHandelEFte(r) { return wvEffFTEBasis(r) * wvHandelPct(r); }
+// Datum-hulpjes (lokale datums als 'JJJJ-MM-DD')
+function wvDatumPlus(iso, dagen) { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + dagen); return uDatumISO(d); }
+function wvMaandagVan(iso) { const d = new Date(iso + 'T12:00:00'); return wvDatumPlus(iso, -((d.getDay() + 6) % 7)); }
+function wvIsWerkdag(iso) { const g = new Date(iso + 'T12:00:00').getDay(); return g >= 1 && g <= 5; }
+function wvWerkdagenTussen(van, tot) {
+  let n = 0;
+  for (let d = van; d <= tot; d = wvDatumPlus(d, 1)) if (wvIsWerkdag(d)) n++;
+  return n;
+}
+// eFTE van een rechter op een bepaalde dag: 0 vóór de aanstellingsdatum, de oude FTE vóór
+// de ingangsdatum van een FTE-wijziging.
+function wvEFteOp(r, iso) {
+  if (r.aanstellingsdatum && iso < r.aanstellingsdatum) return 0;
+  if (r.fte_ingangsdatum && r.fte_voor != null && iso < r.fte_ingangsdatum) {
+    const aftrek = (r.vrijstellingen || []).reduce((s, v) => s + (parseFloat(v.fte) || 0), 0);
+    return Math.max(0, (parseFloat(r.fte_voor) || 0) - aftrek);
+  }
+  return wvEffFTEBasis(r);
+}
+// Afwezigheid die meetelt voor de verdeling: periodes van minstens een hele week
+// (5 werkdagen), plus het vinkje "afwezig" vanaf het moment van aanvinken. Een lopende
+// periode die met het vinkje is uitgezet ("toch aanwezig") telt niet. Kortere afwezigheid
+// blijft zichtbaar maar verandert de verdeling niet.
+const WV_AFWEZIG_MIN_WERKDAGEN = 5;
+function wvTellendeAfwezigheid(r) {
+  const vandaag = uDatumISO();
+  let lijst = (r.afwezigPeriodes || []).filter(p => p.van && p.tot && p.van <= p.tot).map(p => ({ van: p.van, tot: p.tot }));
+  if (r.afwezigHandmatig === false) lijst = lijst.filter(p => !(p.van <= vandaag && p.tot >= vandaag));
+  if (r.afwezigHandmatig === true) lijst.push({ van: r.afwezigSinds || vandaag, tot: vandaag, open: true });
+  // Overlappende of aansluitende periodes eerst samenvoegen (anders tellen dagen dubbel of
+  // valt een lange afwezigheid in twee "korte" stukken uiteen)
+  lijst.sort((a, b) => a.van.localeCompare(b.van));
+  const samen = [];
+  for (const p of lijst) {
+    const vorige = samen[samen.length - 1];
+    if (vorige && p.van <= wvDatumPlus(vorige.tot, 1)) { if (p.tot > vorige.tot) vorige.tot = p.tot; vorige.open = vorige.open || p.open; }
+    else samen.push({ ...p });
+  }
+  return samen
+    .filter(p => wvWerkdagenTussen(p.van, p.tot) >= WV_AFWEZIG_MIN_WERKDAGEN)
+    .map(p => p.open ? { van: p.van, tot: '9999-12-31' } : p);
+}
+// Korte uitleg voor ranglijst en advies: nu afwezig, of binnenkort (binnen 4 weken).
+function wvAfwezigHint(r) {
+  const vandaag = uDatumISO();
+  const kort = iso => new Date(iso + 'T12:00:00').toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  const periodes = (r.afwezigPeriodes || []).filter(p => p.van && p.tot);
+  if (wvIsAfwezig(r)) {
+    const p = r.afwezigHandmatig === true ? null : periodes.find(p => p.van <= vandaag && p.tot >= vandaag);
+    return '🏖 afwezig' + (p ? ' t/m ' + kort(p.tot) : '');
+  }
+  const grens = wvDatumPlus(vandaag, 28);
+  const p = periodes.filter(p => p.van > vandaag && p.van <= grens).sort((a, b) => a.van.localeCompare(b.van))[0];
+  if (!p) return '';
+  const wd = wvWerkdagenTussen(p.van, p.tot);
+  const duur = wd >= 5 ? Math.max(1, Math.round(wd / 5)) + ' wk' : wd + (wd === 1 ? ' dag' : ' dagen');
+  return '🏖 afwezig vanaf ' + kort(p.van) + ' (' + duur + ')';
+}
+// De evenredige verdeling — één berekening voor handel en kanton.
+// Elke openstaande zaak telt in de week waarin hij is toegedeeld (zaakdatum; zonder datum:
+// deze week). De punten van een week worden verdeeld over de rechters die toen in het team
+// werkten, naar eFTE × aandeel (handel% of kanton%) × aanwezige werkdagen in die week.
+// Punten van iemand die die week (nog) niet meetelde — bijv. geïmporteerde zaken van vóór
+// de aanstelling — vallen neutraal uit. Toekomstige afwezigheid verandert niets.
+// items: [{ datum, rid, pt }]; puntenVoor(rid) = de huidige punten (zelfde bron als elders).
+function wvEvenredigAandeel(team, items, aandeelVan, puntenVoor) {
+  const vandaag = uDatumISO();
+  const dezeWeek = wvMaandagVan(vandaag);
+  const ids = new Set(team.map(r => r.id));
+  const afw = new Map(team.map(r => [r.id, wvTellendeAfwezigheid(r)]));
+  const aandeel = new Map(team.map(r => [r.id, aandeelVan(r)]));
+  const perWeek = new Map();
+  for (const it of items) {
+    if (!ids.has(it.rid) || !it.pt) continue;
+    const wk = it.datum ? wvMaandagVan(it.datum) : dezeWeek;
+    if (!perWeek.has(wk)) perWeek.set(wk, []);
+    perWeek.get(wk).push(it);
+  }
+  const normaal = new Map(team.map(r => [r.id, 0]));
+  for (const [wk, lijst] of perWeek) {
+    // Werkdagen van die week (deze week: tot en met vandaag)
+    const dagen = [];
+    for (let i = 0; i < 5; i++) { const d = wvDatumPlus(wk, i); if (wk !== dezeWeek || d <= vandaag) dagen.push(d); }
+    if (!dagen.length) dagen.push(wk);
+    const gewicht = new Map(team.map(r => {
+      const perioden = afw.get(r.id);
+      let g = 0;
+      for (const d of dagen) if (!perioden.some(p => d >= p.van && d <= p.tot)) g += wvEFteOp(r, d);
+      return [r.id, g * aandeel.get(r.id)];
+    }));
+    const totG = [...gewicht.values()].reduce((a, b) => a + b, 0);
+    let pool = 0;
+    for (const it of lijst) {
+      if (totG > 0 && gewicht.get(it.rid) > 0) pool += it.pt;
+      else normaal.set(it.rid, normaal.get(it.rid) + it.pt); // neutraal
     }
+    if (totG > 0) for (const r of team) normaal.set(r.id, normaal.get(r.id) + pool * gewicht.get(r.id) / totG);
   }
-  return tot ? { van, tot } : null;
+  const data = team.map(r => {
+    const eFte = wvEFteOp(r, vandaag) * aandeel.get(r.id);
+    const huidig = puntenVoor(r.id);
+    const nml = normaal.get(r.id);
+    return { r, eFte, huidig, normaal: nml, verschil: huidig - nml, afwezig: wvIsAfwezig(r) };
+  }).sort((a, b) => a.verschil - b.verschil);
+  return {
+    team, data,
+    totPt:   data.reduce((s, d) => s + d.huidig, 0),
+    totEFte: data.reduce((s, d) => s + d.eFte, 0),
+  };
 }
 
-// Beschikbaarheidsfractie [0,1] van een rechter over de horizon. De handmatige
-// afwezig-checkbox (en legacy 'afwezig') overschrijven de periodes: aan = 0, uit = 1.
-function wvBeschikbaarheid(r, horizon) {
-  if (r.afwezigHandmatig === true)  return 0;
-  if (r.afwezigHandmatig === false) return 1;
-  if (r.afwezig) return 0; // legacy backwards compat
-  if (!horizon) return 1;
-  const MS = 86400000;
-  const horizonDagen = Math.round((new Date(horizon.tot) - new Date(horizon.van)) / MS) + 1;
-  if (horizonDagen <= 0) return 1;
-  // Knip de periodes op de horizon en voeg overlappende periodes eerst samen —
-  // anders tellen gedeelde dagen dubbel (bijv. "vakantie" en "cursus" die overlappen)
-  // en valt de beschikbaarheid te laag uit.
-  const stukken = (r.afwezigPeriodes || [])
-    .filter(p => p.van && p.tot)
-    .map(p => ({ s: p.van > horizon.van ? p.van : horizon.van, e: p.tot < horizon.tot ? p.tot : horizon.tot }))
-    .filter(p => p.s <= p.e)
-    .sort((a, b) => a.s.localeCompare(b.s));
-  let afwezigDagen = 0, curS = null, curE = null;
-  const telInterval = () => { if (curS) afwezigDagen += Math.round((new Date(curE) - new Date(curS)) / MS) + 1; };
-  for (const p of stukken) {
-    if (curE === null || p.s > curE) { telInterval(); curS = p.s; curE = p.e; }
-    else if (p.e > curE) curE = p.e;
-  }
-  telInterval();
-  afwezigDagen = Math.min(afwezigDagen, horizonDagen);
-  return Math.max(0, 1 - afwezigDagen / horizonDagen);
+// Kaart bij een WV-rechter: via de vaste koppeling (pk_id), anders op naam.
+function pkKaartVoorRechter(r) {
+  return (r.pk_id && pkKaarten.find(k => k.id === r.pk_id)) || pkGetKaartVoorNaam(r.naam);
 }
-
-// eFTE gewogen naar beschikbaarheid — de maat voor het 'eerlijk aandeel' in de verdeling.
-function wvEffFTEGewogen(r, horizon) {
-  return wvEffFTEBasis(r) * wvBeschikbaarheid(r, horizon);
-}
-
-// Team voor de evenredige verdeling/aanbeveling: handel-rechters met beschikbaarheid > 0
-// (dus inclusief wie vandaag afwezig is maar binnen de horizon terugkomt; exclusief wie de
-// hele horizon weg is). Bewust losstaand van wvActieveHandelRechters() (= vandaag aanwezig).
-function wvVerdeelTeam(horizon) {
-  return wvRechters.filter(r => wvIsRechterRol(r) && wvIsHandelRechter(r) && wvBeschikbaarheid(r, horizon) > 0);
-}
-
 function pkGetKaartVoorNaam(naam) {
   return pkKaarten.find(k => k.naam.toLowerCase() === naam.toLowerCase()) || null;
 }
 function wvIsHandelRechter(r) {
-  const k = pkGetKaartVoorNaam(r.naam);
+  const k = pkKaartVoorRechter(r);
   return !k || (parseFloat(k.handel_pct) || 0) > 0;
 }
 // Aanwezige handel-rechters: de set die meetelt in verdeling/ranglijst/spreiding.
@@ -3181,7 +3257,7 @@ function wvActieveHandelRechters() {
   return wvRechters.filter(r => wvIsRechterRol(r) && !wvIsAfwezig(r) && wvIsHandelRechter(r));
 }
 function wvHeeftOnvolledigProfiel(r) {
-  const k = pkGetKaartVoorNaam(r.naam);
+  const k = pkKaartVoorRechter(r);
   if (!k) return false;
   const h = parseFloat(k.handel_pct) || 0;
   const c = parseFloat(k.kanton_pct) || 0;
@@ -3204,15 +3280,15 @@ function zaakGewichtVan(z) {
   return zaakIsKanton(z) ? (parseFloat(wvKantonGewichten[z.zwaarte]) || 1) : wvGewicht(z.zwaarte);
 }
 function wvIsKantonRechter(r) {
-  const k = pkGetKaartVoorNaam(r.naam);
+  const k = pkKaartVoorRechter(r);
   return !!k && (parseFloat(k.kanton_pct) || 0) > 0;
 }
 function wvKantonPct(r) {
-  const k = pkGetKaartVoorNaam(r.naam);
+  const k = pkKaartVoorRechter(r);
   return k ? (parseFloat(k.kanton_pct) || 0) / 100 : 0;
 }
-// Kanton-eFTE: effectieve FTE (gewogen naar beschikbaarheid) × kanton-aandeel uit de PK.
-function wvKantonEFte(r, horizon) { return wvEffFTEGewogen(r, horizon) * wvKantonPct(r); }
+// Kanton-eFTE vandaag: effectieve FTE × kanton-aandeel uit de PK.
+function wvKantonEFte(r) { return wvEffFTEBasis(r) * wvKantonPct(r); }
 function wvPakketPunten(p) {
   const t = wvPakketTypes.find(t => t.id === p.type_id);
   return t ? (parseFloat(t.punten) || 0) : 0;
@@ -3294,11 +3370,8 @@ function wvRenderRechters() {
     lijst.innerHTML='<div class="leeg">Nog geen rechters. Voeg teamleden toe via de <a href="#" onclick="showViewByName(\'personeelskaart\');return false;" style="color:#f59e0b;text-decoration:none;font-weight:600;">Personeelskaart</a> en gebruik ↗ om ze door te zetten.</div>';
     return;
   }
-  // Eff. FTE wordt gewogen naar beschikbaarheid over de verdeel-horizon: een rechter met
-  // een (toekomstige/gedeeltelijke) afwezigheidsperiode of uitroostering krijgt naar rato
-  // een lagere Eff. FTE — consistent met de evenredige verdeling. Wie de hele horizon weg
-  // is (eFTE 0) telt niet mee in het teamgemiddelde, maar wordt hieronder nog wel getoond.
-  const horizon = wvVerdeelHorizon();
+  // Eff. FTE = handel-eFTE (contract − vrijstellingen − neventaken, × handel%), dezelfde
+  // waarde als in de ranglijst. Afwezigheid werkt via het eerlijke aandeel per week.
   // ⚠️ volgt hetzelfde marge-criterium als de ranglijst en de rechterkeuzelijst
   // (boven de ingestelde belastingmarge, gewogen naar beschikbaarheid) — zo geeft
   // elk scherm hetzelfde oordeel over wie te hoog zit.
@@ -3309,7 +3382,7 @@ function wvRenderRechters() {
   const plvZichtbaar = wvRechters.filter(r => r.rol === 'plaatsvervanger');
   const zichtbaar = rechtersZichtbaar; // used below for per-rechter rows; plv/rio appended after
   const maakRij=r=>{
-    const efteNum=wvEffFTEGewogen(r,horizon);
+    const efteNum=wvHandelEFte(r);
     const intens=efteNum>0?wvPuntenVoor(r.id)/efteNum:null;
     const overbelast=bovenMarge.has(r.id);
     const punten=wvPuntenVoor(r.id);
@@ -3361,13 +3434,13 @@ function wvRenderRechters() {
   const scheidingsrij = plvRioZichtbaar.length ? '<tr><td colspan="7" style="background:#f5f3ff;padding:4px 12px;font-size:11px;color:#6d28d9;font-weight:600;border-top:2px solid #e9d5ff;">Rechters-in-opleiding &amp; plaatsvervangers</td></tr>' : '';
   const plvRioRijen = plvRioZichtbaar.map(maakRij).join('');
   lijst.innerHTML=`<table class="zaken-tabel"><thead><tr>
-    <th>Naam</th><th>FTE</th><th title="Effectieve FTE (contract − vrijstellingen), gewogen naar beschikbaarheid bij afwezigheidsperiodes/uitroostering">Eff. FTE</th><th style="text-align:right;">Punten</th><th style="text-align:right;">Pt/eFTE</th><th>Vrijstellingen</th><th></th>
-  </tr></thead><tbody>${rijen}${scheidingsrij}${plvRioRijen}</tbody></table>` + wvTeamPkMeldingHtml() + wvKantonTeamSectieHtml(horizon);
+    <th>Naam</th><th>FTE</th><th title="Effectieve FTE voor handel: contract − vrijstellingen − neventaken, maal het handelpercentage">Eff. FTE</th><th style="text-align:right;">Punten</th><th style="text-align:right;">Pt/eFTE</th><th>Vrijstellingen</th><th></th>
+  </tr></thead><tbody>${rijen}${scheidingsrij}${plvRioRijen}</tbody></table>` + wvTeamPkMeldingHtml() + wvKantonTeamSectieHtml();
 }
 
 // Kanton-sectie onder de teamtabel: wie doet kanton (kanton% > 0 in de PK), met
 // kanton-eFTE, kanton-punten, pakketten en de aardzaak-bevoegdheden (vinkjes).
-function wvKantonTeamSectieHtml(horizon) {
+function wvKantonTeamSectieHtml() {
   if (!wvKantonActief) return '';
   const team = wvRechters.filter(r => wvIsRechterRol(r) && wvIsKantonRechter(r));
   if (!team.length) return `<div class="card" style="margin-top:16px;"><div class="card-title">🏛 Kanton</div>
@@ -3382,7 +3455,7 @@ function wvKantonTeamSectieHtml(horizon) {
     return `<tr>
       <td style="font-weight:600;">${wvEsc(r.naam)}</td>
       <td style="text-align:right;">${Math.round(wvKantonPct(r)*100)}%</td>
-      <td style="text-align:right;font-weight:600;">${wvKantonEFte(r, horizon).toFixed(2).replace('.',',')}</td>
+      <td style="text-align:right;font-weight:600;">${wvKantonEFte(r).toFixed(2).replace('.',',')}</td>
       <td style="text-align:right;">${wvKantonPuntenVoor(r.id).toFixed(1).replace('.',',')}</td>
       <td style="text-align:right;">${nPak || '—'}</td>
       <td>${vinkjes || '<span style="font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;">geen categorieën ingesteld</span>'}</td>
@@ -3411,6 +3484,15 @@ function wvKantonCatRechterToggle(rid, cid, aan) {
 function wvToggleAfwezig(rid,val) {
   const r=wvRechters.find(r=>r.id===rid);
   if (!r) return;
+  if (val) {
+    // Afwezig vanaf nu (telt mee in de verdeling zodra het minstens een week duurt)
+    r.afwezigSinds = r.afwezigSinds || uDatumISO();
+  } else if (r.afwezigSinds) {
+    // Uitvinken: de afwezigheid wordt een gewone periode t/m gisteren, zodat de geschiedenis klopt
+    const gister = wvDatumPlus(uDatumISO(), -1);
+    if (r.afwezigSinds <= gister) (r.afwezigPeriodes = r.afwezigPeriodes || []).push({ id: wvUid(), van: r.afwezigSinds, tot: gister, label: 'afwezig (vinkje)' });
+    delete r.afwezigSinds;
+  }
   // Uitvinken is alleen een overschrijving ("toch aanwezig") als er nú een periode loopt;
   // anders terug naar automatisch, zodat latere afwezigheidsperiodes gewoon meetellen.
   r.afwezigHandmatig = val ? true : (wvHeeftActievePeriode(r) ? false : null);
@@ -3484,7 +3566,7 @@ function wvRechterOpties(selId, inclPlvRio=false, onlyHandel=false, aanbId=null,
   const vd = wvHandelVerdeelData();
   const infoVoor = new Map((vd?.data || []).map(d => [d.r.id, d]));
   const renderOpt=r=>{
-    const efte=wvEffFTE(r);
+    const efte=wvHandelEFte(r);
     const d=infoVoor.get(r.id);
     const overbelast=!!d&&wvBovenMarge(d);
     const label=`${overbelast?'⚠ ':''}${r.naam}${wvIsAfwezig(r)?' (afwezig)':''} · eFTE ${efte.toFixed(2).replace('.',',')}`;
@@ -3514,11 +3596,9 @@ function wvAanbevolenRechter(exclude=[]) {
   // Zelfde rekensom als de evenredige verdeling (wvHandelVerdeelData), zodat advies,
   // ⚠-markering en ranglijst nooit elkaar tegenspreken: kies wie het meest achterloopt.
   const vd = wvHandelVerdeelData();
-  if (!vd) {
-    const horizon = wvVerdeelHorizon();
-    return wvVerdeelTeam(horizon).find(r => !exclude.includes(r.id)) || null;
-  }
-  const kand = vd.data.filter(d => !exclude.includes(d.r.id));
+  if (!vd) return wvActieveHandelRechters().find(r => !exclude.includes(r.id)) || null;
+  // Wie vandaag afwezig is, krijgt geen advies (telt wel mee in de verdeling)
+  const kand = vd.data.filter(d => !exclude.includes(d.r.id) && !d.afwezig);
   if (!kand.length) return null;
   return kand.reduce((best, d) => {
     const v = d.verschil - best.verschil;
@@ -3541,7 +3621,8 @@ function wvAdviesRegel(r, rolLabel) {
   const uitleg = v < -0.05 ? `loopt ${t} pt achter op de evenredige verdeling`
                : v >  0.05 ? `staat er ondanks +${t} pt het gunstigst voor`
                : 'zit precies op de evenredige verdeling';
-  return `<div style="font-family:Arial,sans-serif;font-size:11px;color:#78716c;margin-top:4px;">💡 Advies${rolLabel ? ' ' + rolLabel : ''}: <strong>${wvEsc(r.naam)}</strong> — ${uitleg}</div>`;
+  const hint = wvAfwezigHint(r);
+  return `<div style="font-family:Arial,sans-serif;font-size:11px;color:#78716c;margin-top:4px;">💡 Advies${rolLabel ? ' ' + rolLabel : ''}: <strong>${wvEsc(r.naam)}</strong> — ${uitleg}${hint ? ` <span style="color:#b45309;">· ${wvEsc(hint)}</span>` : ''}</div>`;
 }
 
 function wvRenderZaakSelectors() { wvVerdeelCacheTijdens(_wvRenderZaakSelectors); }
@@ -3599,7 +3680,7 @@ function wvKantonRechterOpties(selId, catId) {
 
 function wvAanbevolenKantonRechter(catId, exclude = []) {
   const kvd = wvKantonVerdeelData(catId);
-  const kand = (kvd?.data || []).filter(d => !exclude.includes(d.r.id));
+  const kand = (kvd?.data || []).filter(d => !exclude.includes(d.r.id) && !d.afwezig);
   if (!kand.length) return null;
   return kand.reduce((best, d) => {
     const v = d.verschil - best.verschil;
@@ -4240,7 +4321,7 @@ function wvRenderOverzicht() {
   wvVulJaarrapportJaren();
   const teamR=wvRechters.filter(r=>wvIsRechterRol(r)&&wvIsHandelRechter(r));
   const totPunten=wvTotaalHandelPunten();
-  // Kleuren, norm én eFTE uit de evenredige verdeling (gewogen naar beschikbaarheid), zodat
+  // Kleuren, norm én eFTE uit de evenredige verdeling, zodat
   // dit overzicht hetzelfde zegt als de ranglijst
   const ovVd=wvHandelVerdeelData();
   const ovMap=new Map((ovVd?.data||[]).map(d=>[d.r.id,d]));
@@ -4358,10 +4439,9 @@ function wvPrintStijl() {
 // Dezelfde verantwoording als voor handel, maar dan met kanton-punten
 // (kantonzaken + zittingspakketten) gewogen naar kanton-eFTE.
 function wvKantonOverzichtData() {
-  const horizon = wvVerdeelHorizon();
   const team = wvRechters.filter(r => wvIsRechterRol(r) && wvIsKantonRechter(r));
   return team.map(r => {
-    const eFte = wvKantonEFte(r, horizon);
+    const eFte = wvKantonEFte(r);
     const punten = wvKantonPuntenVoor(r.id);
     const zaken = wvZaken.filter(z => !z.afgehandeld && zaakIsKanton(z) && zaakBijdrageVoor(z, r.id) > 0).length;
     const pakketten = wvKantonAantalPakkettenVoor(r.id);
@@ -4534,7 +4614,7 @@ function wvJaarrapport() {
   const datum   = uDatumLang();
   const actief  = wvZaken.filter(z => !z.afgehandeld).length;
   const teamR   = wvRechters.filter(r => wvIsRechterRol(r) && wvIsHandelRechter(r));
-  const totEFTE = teamR.reduce((a, r) => a + wvEffFTE(r), 0);
+  const totEFTE = teamR.reduce((a, r) => a + wvHandelEFte(r), 0);
 
   const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8">
   <title>Jaarrapport ${jaar}</title>
@@ -5422,29 +5502,6 @@ function wvRenderVerdeelStatus() {
   }
 }
 
-// Punten van één rechter op (open, handel)zaken met een zaakdatum vóór 'datum'.
-function wvEigenPuntenVoor(rid, datum) {
-  let p = 0;
-  for (const z of wvZaken) {
-    if (z.afgehandeld || zaakIsKanton(z) || !z.datum || z.datum >= datum) continue;
-    p += zaakBijdrageVoor(z, rid);
-  }
-  return p;
-}
-function wvRefPuntenSinds(datum, teamRH) {
-  return wvRefPuntenSindsTot(datum, null, teamRH);
-}
-function wvRefPuntenSindsTot(van, tot, teamRH) {
-  let p = 0;
-  for (const z of wvZaken) {
-    if (z.afgehandeld || zaakIsKanton(z)) continue;
-    if (van && z.datum && z.datum < van) continue;
-    if (tot && (!z.datum || z.datum >= tot)) continue; // zonder datum: alleen in de periode ná 'tot' (niet dubbel)
-    for (const r of teamRH) p += zaakBijdrageVoor(z, r.id);
-  }
-  return p;
-}
-
 // Centrale berekening van de evenredige handel-verdeling: per rechter het huidige
 // puntental, het 'normale' (eerlijke) aandeel en het verschil. Wordt gebruikt door
 // de ranglijst én de ⚠-markering in de rechterkeuzelijst, zodat beide altijd
@@ -5465,37 +5522,17 @@ function wvHandelVerdeelData() {
   return vd;
 }
 function _wvHandelVerdeelDataBereken() {
-  const horizon = wvVerdeelHorizon();
-  const teamRH = wvVerdeelTeam(horizon);
-  if (teamRH.length < 2) return null;
-  const totPt   = teamRH.reduce((s,r) => s + wvPuntenVoor(r.id), 0);
-  // eFTE gewogen naar beschikbaarheid: wie (deels) afwezig is over de horizon krijgt een
-  // evenredig kleiner aandeel. Zonder afwezigheid is dit gelijk aan wvEffFTE.
-  const totEFte = teamRH.reduce((s,r) => s + wvEffFTEGewogen(r, horizon), 0);
-  if (totEFte === 0) return null;
-  const data = teamRH.map(r => {
-    const eFte    = wvEffFTEGewogen(r, horizon);
-    const huidig  = wvPuntenVoor(r.id);
-    let normaal;
-    if (r.fte_ingangsdatum && r.fte_voor != null) {
-      const van = r.aanstellingsdatum || null;
-      const besch = wvBeschikbaarheid(r, horizon);
-      const vrijTot = (r.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0),0);
-      const eFteOud = Math.max(0, parseFloat(r.fte_voor) - vrijTot) * besch;
-      const ptVoor = wvRefPuntenSindsTot(van, r.fte_ingangsdatum, teamRH);
-      const ptNa   = wvRefPuntenSinds(r.fte_ingangsdatum, teamRH);
-      normaal = eFteOud / totEFte * ptVoor + eFte / totEFte * ptNa;
-    } else {
-      const refPt = r.aanstellingsdatum ? wvRefPuntenSinds(r.aanstellingsdatum, teamRH) : totPt;
-      normaal = eFte / totEFte * refPt;
-    }
-    // Zaken van vóór de aanstellingsdatum die deze rechter tóch heeft (bijv. overgenomen
-    // of geïmporteerd) tellen niet mee in zijn referentie; tel ze daarom ook niet tegen
-    // hem: ze horen bij het eerlijke aandeel, zodat ze neutraal uitvallen.
-    if (r.aanstellingsdatum) normaal += wvEigenPuntenVoor(r.id, r.aanstellingsdatum);
-    return { r, eFte, huidig, normaal, verschil: huidig - normaal };
-  }).sort((a,b) => a.verschil - b.verschil);
-  return { horizon, teamRH, totPt, totEFte, data };
+  // Iedereen in het handelsteam telt mee, ook wie afwezig is (die krijgt alleen geen advies)
+  const team = wvRechters.filter(r => wvIsRechterRol(r) && wvIsHandelRechter(r));
+  if (team.length < 2) return null;
+  const items = [];
+  for (const z of wvZaken) {
+    if (z.afgehandeld || zaakIsKanton(z)) continue;
+    for (const r of team) { const pt = zaakBijdrageVoor(z, r.id); if (pt) items.push({ datum: z.datum, rid: r.id, pt }); }
+  }
+  const res = wvEvenredigAandeel(team, items, wvHandelPct, wvPuntenVoor);
+  if (res.totEFte === 0) return null;
+  return { ...res, teamRH: team };
 }
 
 // Oordeel over één regel uit wvHandelVerdeelData / wvKantonVerdeelData:
@@ -5540,38 +5577,16 @@ function wvRlAfwijkingCel(d, kleur) {
 // het eerlijke aandeel wordt gewogen naar kanton-eFTE (eFTE × kanton%). Met catId alleen
 // de rechters die die aardzaak mogen doen (voor het advies bij een kantonzaak).
 function wvKantonVerdeelData(catId = null) {
-  const horizon = wvVerdeelHorizon();
-  const team = wvRechters.filter(r => wvIsRechterRol(r) && wvIsKantonRechter(r)
-    && wvBeschikbaarheid(r, horizon) > 0 && wvMagCategorie(r, catId));
+  const team = wvRechters.filter(r => wvIsRechterRol(r) && wvIsKantonRechter(r) && wvMagCategorie(r, catId));
   if (!team.length) return null;
-  const totEFte = team.reduce((s, r) => s + wvKantonEFte(r, horizon), 0);
-  const totPt   = team.reduce((s, r) => s + wvKantonPuntenVoor(r.id), 0);
-  // Kantonpunten (open kantonzaken + zittingspakketten) met datum vanaf 'van'; met rid
-  // alleen die van één rechter, met 'tot' alleen vóór die datum.
-  const kantonPunten = (van, tot, rid) => {
-    let p = 0;
-    for (const z of wvZaken) {
-      if (z.afgehandeld || !zaakIsKanton(z)) continue;
-      if ((van && z.datum && z.datum < van) || (tot && (!z.datum || z.datum >= tot))) continue;
-      for (const r of (rid ? [{ id: rid }] : team)) p += zaakBijdrageVoor(z, r.id);
-    }
-    for (const pk of wvPakketten) {
-      if ((van && pk.datum && pk.datum < van) || (tot && (!pk.datum || pk.datum >= tot))) continue;
-      if (rid ? pk.rechter_id === rid : team.some(r => r.id === pk.rechter_id)) p += wvPakketPunten(pk);
-    }
-    return p;
-  };
-  const data = team.map(r => {
-    const eFte   = wvKantonEFte(r, horizon);
-    const huidig = wvKantonPuntenVoor(r.id);
-    // Zoals bij handel: wie later is aangesteld, krijgt alleen een aandeel van wat er sindsdien
-    // is verdeeld; eigen punten van vóór de aanstelling vallen neutraal uit.
-    let normaal = totEFte > 0
-      ? eFte / totEFte * (r.aanstellingsdatum ? kantonPunten(r.aanstellingsdatum, null) : totPt) : 0;
-    if (r.aanstellingsdatum) normaal += kantonPunten(null, r.aanstellingsdatum, r.id);
-    return { r, eFte, huidig, normaal, verschil: huidig - normaal };
-  }).sort((a, b) => a.verschil - b.verschil);
-  return { horizon, team, totPt, totEFte, data };
+  const ids = new Set(team.map(r => r.id));
+  const items = [];
+  for (const z of wvZaken) {
+    if (z.afgehandeld || !zaakIsKanton(z)) continue;
+    for (const r of team) { const pt = zaakBijdrageVoor(z, r.id); if (pt) items.push({ datum: z.datum, rid: r.id, pt }); }
+  }
+  for (const pk of wvPakketten) if (ids.has(pk.rechter_id)) items.push({ datum: pk.datum, rid: pk.rechter_id, pt: wvPakketPunten(pk) });
+  return wvEvenredigAandeel(team, items, wvKantonPct, wvKantonPuntenVoor);
 }
 
 // Totaal aan handelpunten van het hele team (alle rechters, ook afwezigen). Eén definitie
@@ -5769,7 +5784,7 @@ function _wvRenderKantonRanglijst() {
   </div>`;
   const kvd = wvKantonVerdeelData();
   if (!kvd || kvd.team.length < 2 || kvd.totEFte === 0) { _wvZetRanglijst(leegHint); return; }
-  const { horizon, team, totPt, totEFte, data } = kvd;
+  const { team, totPt, totEFte, data } = kvd;
   const schaal = wvRlSchaal(data);
   const rijen = data.map((d, i) => {
     const _st      = wvMargeStatus(d);
@@ -5781,7 +5796,7 @@ function _wvRenderKantonRanglijst() {
     const cats     = (d.r.kanton_categorieen || []).map(id => wvKantonCategorieen.find(c => c.id === id)?.naam).filter(Boolean).join(', ');
     return `<tr class="wv-rl-rij" data-rid="${d.r.id}" style="cursor:pointer;${bg?`background:${bg};`:''}" onclick="wvRlToggle(this)" title="Klik voor de zaken en zittingen van deze rechter">
       <td style="padding:4px 6px;font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;width:16px;">${i+1}</td>
-      <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:12px;font-weight:600;"><span class="wv-rl-chev" style="display:inline-block;width:11px;color:#a8a29e;font-weight:normal;">${isOpen?'▾':'▸'}</span> ${wvEsc(d.r.naam)}${cats?` <span style="font-size:9px;font-weight:normal;color:#0e7490;" title="Aardzaak-bevoegdheden">${wvEsc(cats)}</span>`:''}</td>
+      <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:12px;font-weight:600;"><span class="wv-rl-chev" style="display:inline-block;width:11px;color:#a8a29e;font-weight:normal;">${isOpen?'▾':'▸'}</span> ${wvEsc(d.r.naam)}${cats?` <span style="font-size:9px;font-weight:normal;color:#0e7490;" title="Aardzaak-bevoegdheden">${wvEsc(cats)}</span>`:''}${(h => h ? ` <span style="font-size:10px;font-weight:normal;color:#b45309;">${wvEsc(h)}</span>` : '')(wvAfwezigHint(d.r))}</td>
       <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:11px;color:#78716c;text-align:right;white-space:nowrap;">${d.eFte.toFixed(2).replace('.',',')} k-eFTE</td>
       <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:11px;text-align:right;white-space:nowrap;">${d.huidig.toFixed(1).replace('.',',')} pt${nPak?` <span style="color:#a8a29e;" title="waarvan ${nPak} zittingspakket${nPak===1?'':'ten'}">· ${nPak}📅</span>`:''}</td>
       <td style="padding:4px 8px;width:100px;">
@@ -5810,7 +5825,7 @@ function _wvRenderHandelRanglijst() {
   </div>`;
   const vd = wvHandelVerdeelData();
   if (!vd) { _wvZetRanglijst(leegHint); return; }
-  const { horizon, totPt, totEFte, data } = vd;
+  const { totPt, totEFte, data } = vd;
   const schaal = wvRlSchaal(data);
   const rijen = data.map((d,i) => {
     const _st      = wvMargeStatus(d);
@@ -5824,7 +5839,7 @@ function _wvRenderHandelRanglijst() {
     const isOpen = wvRlOpen.has(d.r.id);
     return `<tr class="wv-rl-rij" data-rid="${d.r.id}" style="cursor:pointer;${bg?`background:${bg};`:''}" onclick="wvRlToggle(this)" title="Klik voor de zaken van deze rechter">
       <td style="padding:4px 6px;font-family:Arial,sans-serif;font-size:11px;color:#a8a29e;width:16px;">${i+1}</td>
-      <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:12px;font-weight:600;"><span class="wv-rl-chev" style="display:inline-block;width:11px;color:#a8a29e;font-weight:normal;">${isOpen?'▾':'▸'}</span> ${wvEsc(d.r.naam)}${badges?` <span style="font-size:9px;font-weight:normal;color:#a8a29e;">${badges}</span>`:''}</td>
+      <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:12px;font-weight:600;"><span class="wv-rl-chev" style="display:inline-block;width:11px;color:#a8a29e;font-weight:normal;">${isOpen?'▾':'▸'}</span> ${wvEsc(d.r.naam)}${badges?` <span style="font-size:9px;font-weight:normal;color:#a8a29e;">${badges}</span>`:''}${(h => h ? ` <span style="font-size:10px;font-weight:normal;color:#b45309;">${wvEsc(h)}</span>` : '')(wvAfwezigHint(d.r))}</td>
       <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:11px;color:#78716c;text-align:right;white-space:nowrap;">${d.eFte.toFixed(2).replace('.',',')} eFTE</td>
       <td style="padding:4px 8px;font-family:Arial,sans-serif;font-size:11px;text-align:right;white-space:nowrap;">${d.huidig.toFixed(1).replace('.',',')} pt</td>
       <td style="padding:4px 8px;width:100px;">
@@ -5837,10 +5852,10 @@ function _wvRenderHandelRanglijst() {
   const impTel = wvZaken.filter(z => !z.afgehandeld && z.geimporteerd).length;
   _wvZetRanglijst(`<div class="card" style="padding:12px 16px;">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
-      <div class="card-title" style="margin-bottom:0;">Evenredige verdeling <span style="font-family:Arial,sans-serif;font-size:10px;font-weight:normal;color:#a8a29e;">· klik op een rechter voor zijn zaken</span></div>
+      <div class="card-title" style="margin-bottom:0;">Evenredige verdeling <span style="font-family:Arial,sans-serif;font-size:10px;font-weight:normal;color:#a8a29e;">· klik op een rechter voor de zaken</span></div>
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
         <button onclick="wvRlToggleAlle(this)" style="background:none;border:none;color:#78716c;cursor:pointer;font-family:Arial,sans-serif;font-size:10px;padding:0;white-space:nowrap;">${data.every(d=>wvRlOpen.has(d.r.id))?'⬍ Alles inklappen':'⬍ Alles uitklappen'}</button>
-        <div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;">${totPt.toFixed(1).replace('.',',')} pt totaal${impTel ? ` <span title="Geïmporteerde zaken tellen wel mee in de verdeling, maar niet in de weekgrafiek">· waarvan ${impTel} imp.</span>` : ''} · norm ${totEFte>0?(totPt/totEFte).toFixed(2).replace('.',','):0} pt/eFTE · marge ±${Math.round(wvBelastingMarge*100)}% · ${horizon ? 'gewogen naar beschikbaarheid' : 'alleen aanwezige rechters'}</div>
+        <div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;">${totPt.toFixed(1).replace('.',',')} pt totaal${impTel ? ` <span title="Geïmporteerde zaken tellen wel mee in de verdeling, maar niet in de weekgrafiek">· waarvan ${impTel} imp.</span>` : ''} · norm ${totEFte>0?(totPt/totEFte).toFixed(2).replace('.',','):0} pt/eFTE · marge ±${Math.round(wvBelastingMarge*100)}% · eerlijk aandeel per week</div>
       </div>
     </div>
     <table style="width:100%;border-collapse:collapse;"><tbody>${rijen}</tbody></table>
@@ -7749,6 +7764,8 @@ function stateApply(data) {
     if (r.afwezigHandmatig === undefined) r.afwezigHandmatig = r.afwezig ? true : null;
     // Een oude "toch aanwezig"-overschrijving zonder lopende periode zou alle latere periodes negeren
     if (r.afwezigHandmatig === false && !wvHeeftActievePeriode(r)) r.afwezigHandmatig = null;
+    // Vinkje "afwezig" van vóór deze versie: telt vanaf vandaag
+    if (r.afwezigHandmatig === true && !r.afwezigSinds) r.afwezigSinds = uDatumISO();
   });
   if (Array.isArray(data.zaken))              wvZaken             = data.zaken;
   if (Array.isArray(data.snapshots))          wvSnapshots         = data.snapshots;
@@ -8487,7 +8504,7 @@ function wvBouwSnapshot(notitie) {
     jaar:  wpIsoJaar(new Date()),
     notitie: notitie || '',
     rechters: wvRechters.map(r => {
-      const efte   = wvEffFTE(r);
+      const efte   = vdMap.has(r.id) ? vdMap.get(r.id).eFte : wvHandelEFte(r);
       const punten = wvPuntenVoor(r.id);
       const tl     = wvZakentellingVoor(r.id);
       const d      = vdMap.get(r.id);
@@ -8496,7 +8513,7 @@ function wvBouwSnapshot(notitie) {
     }),
     totaalPunten: wvTotaalHandelPunten(),
     norm: vd && vd.totEFte > 0 ? vd.totPt / vd.totEFte : null,
-    totaalEffFTE: teamRR.reduce((s,r)=>s+wvEffFTE(r),0),
+    totaalEffFTE: vd ? vd.totEFte : 0,
   };
 }
 
@@ -9121,8 +9138,9 @@ function wvExporteerNaarExcel() {
 
   // Tab 1: Overzicht per rechter (alleen reguliere rechters, excl. rio/plaatsvervangers)
   const ovHeader = ['Naam','Rol','FTE','Eff. FTE','Zaken B','Zaken C','Zaken D','Totaal punten','Pt/eFTE'];
+  const ovVd = new Map((wvHandelVerdeelData()?.data || []).map(d => [d.r.id, d]));
   const ovRijen = wvRechters.map(r => {
-    const efte = wvEffFTE(r), punten = wvPuntenVoor(r.id), tl = wvZakentellingVoor(r.id);
+    const efte = ovVd.has(r.id) ? ovVd.get(r.id).eFte : wvHandelEFte(r), punten = wvPuntenVoor(r.id), tl = wvZakentellingVoor(r.id);
     const rolLabel = r.rol==='rio'?'Rio':r.rol==='plaatsvervanger'?'Plaatsvervanger':'Rechter';
     return [r.naam, rolLabel, r.fte, efte.toFixed(2).replace('.',','), tl.B, tl.C, tl.D, punten.toFixed(1).replace('.',','), efte>0?(punten/efte).toFixed(2).replace('.',','):''];
   });
@@ -10793,11 +10811,12 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>Afwezigheid en de evenredige verdeling</h3>
-            <p>Op het tabblad <strong>Team</strong> voer je per rechter afwezigheidsperiodes in (begin- en einddatum). De evenredige verdeling weegt dat automatisch mee: een rechter die de komende periode (deels) afwezig is, krijgt naar rato een kleiner "eerlijk aandeel" en zakt in de ranglijst, zodat er nu al minder nieuwe zaken naar diegene gaan — ook bij een afwezigheid die pas later begint.</p>
+            <p><strong>Hoe het eerlijke aandeel wordt berekend.</strong> De verdeling kijkt naar de <strong>openstaande</strong> zaken. Elke zaak telt mee in de week waarin hij is toegedeeld. De punten van die week worden verdeeld over de rechters die toen in het handelsteam werkten, naar hun <strong>handel-FTE</strong>: de FTE min vrijstellingen en neventaken, maal het handelpercentage op de personeelskaart. Wie later is begonnen of vanaf een datum meer of minder is gaan werken, telt pas mee vanaf die datum.</p>
+            <p><strong>Afwezigheid.</strong> Op het tabblad <strong>Team</strong> voer je per rechter afwezigheidsperiodes in (begin- en einddatum), of je zet het vinkje <em>afwezig</em> (dat geldt vanaf het moment van aanvinken; bij uitvinken wordt het vanzelf een periode met datums). Een afwezigheid van <strong>minstens een hele week</strong> (5 werkdagen) verlaagt het eerlijke aandeel over die weken: wie terugkomt staat gewoon "rond" en hoeft niets in te halen. Kortere afwezigheid blijft zichtbaar maar verandert de verdeling niet. Een afwezigheid die nog moet beginnen, verandert de stand niet: je ziet in de ranglijst en bij het advies alleen een hint als <em>"🏖 afwezig vanaf 9 nov (2 wk)"</em>. Wie vandaag afwezig is, staat wel in de ranglijst maar krijgt geen advies.</p>
+            <p><strong>Zaken afsluiten verandert de stand.</strong> Omdat alleen openstaande zaken tellen, verschuiven de percentages als je een stapel zaken afsluit: wie veel heeft afgerond, komt lager te staan en krijgt de komende tijd weer wat meer. Dat is zo bedoeld — de verdeling gaat over de werkvoorraad van nu.</p>
             <p>Rechts in de ranglijst zie je per rechter de afwijking van zijn/haar eerlijke aandeel als <strong>percentage</strong> (vet), met de punten klein erachter. Het percentage vergelijk je direct met de <strong>marge</strong> (standaard ±15%, instelbaar bij Instellingen): daarboven kleurt de rij rood, daaronder groen. De twee streepjes in het balkje markeren die marge. Bij rechters met nog weinig punten kan een klein verschil een hoog percentage geven; kijk dan ook naar de punten.</p>
-            <p>Staat bij een rechter "mee v/a" (aanstellingsdatum op de personeelskaart), dan wordt die alleen vergeleken met zaken vanaf die datum. Oudere zaken die hij/zij toch heeft (bijvoorbeeld overgenomen), tellen neutraal: niet mee als achterstand en niet als overbelasting.</p>
+            <p>Staat bij een rechter "mee v/a" (aanstellingsdatum op de personeelskaart), dan telt die pas mee vanaf die datum. Oudere zaken die hij of zij toch heeft (bijvoorbeeld overgenomen), tellen neutraal: niet mee als achterstand en niet als overbelasting.</p>
             <p>Het <strong>advies</strong> onder de rechterkeuze, het <strong>⚠-symbool</strong> in de keuzelijst, de <strong>ranglijst</strong>, het <strong>teamoverzicht</strong>, de <strong>snapshot-trend</strong> en op het startscherm de <strong>meldingen</strong>, <strong>Spreiding rechters</strong>, <strong>Intensiteit</strong> en <strong>Handel &amp; kanton per rechter</strong> gebruiken allemaal dezelfde berekening en geven dus altijd hetzelfde oordeel. Voor kanton geldt hetzelfde met de kanton-ranglijst.</p>
-            <p>De horizon loopt van vandaag tot de laatste ingevoerde afwezigheids-einddatum. Wie de hele horizon weg is, valt volledig uit de verdeling. Zonder afwezigheid verandert er niets aan de berekening.</p>
           </div>
           <div class="hdl-card">
             <h3>Week afronden</h3>
