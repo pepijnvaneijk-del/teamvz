@@ -64,6 +64,25 @@
     display: flex;
     padding: 0 20px;
     gap: 2px;
+    align-items: stretch;
+    overflow-x: auto;   /* uiterste noodgreep: nooit knoppen buiten beeld */
+    scrollbar-width: none;
+  }
+  /* Eén vaste regel: knoppen breken nooit af (geen icoon-boven-tekst meer) */
+  .app-nav-btn, .app-nav-status { white-space: nowrap; flex-shrink: 0; }
+  #file-status-text { display: inline-block; max-width: 14em; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  /* Smaller scherm: de knoppen rechts alleen als icoon (naam staat in de tooltip) */
+  @media (max-width: 1400px) {
+    .app-nav-status .nav-lbl { display: none; }
+    #file-status-text { display: inline-block; max-width: 1.5em; overflow: hidden; vertical-align: bottom; }
+  }
+  @media (max-width: 1150px) {
+    .app-nav { padding: 0 8px; }
+    .app-nav-btn { padding: 9px 7px; letter-spacing: 0.03em; }
+  }
+  @media (max-width: 1090px) {
+    .app-nav-btn .nav-lbl { display: none; }  /* smal: ook de onderdelen alleen als icoon */
+    .app-nav-btn { padding: 9px 12px; font-size: 14px; }
   }
   .app-nav-btn {
     padding: 9px 12px;
@@ -613,16 +632,16 @@
 
 <!-- MAIN NAVIGATION -->
 <div class="app-nav">
-  <button class="app-nav-btn active" onclick="showView('home',this)">🏠 Overzicht</button>
-  <button id="nav-btn-weekpost" class="app-nav-btn" style="position:relative;" onclick="showView('weekpost',this)">✉️ Weekpost<span id="wp-concept-dot" title="Er staat een concept-weekmail klaar" style="display:none;position:absolute;top:7px;right:3px;width:7px;height:7px;background:#f59e0b;border-radius:50%;"></span></button>
-  <button class="app-nav-btn" onclick="showView('werklastverdeling',this)">⚖️ Werklastverdeling</button>
-  <button class="app-nav-btn" onclick="showView('personeelskaart',this)">👤 Personeelskaart</button>
-  <button class="app-nav-btn" onclick="showView('werkvoorraad',this)">📈 Werkvoorraad</button>
-  <button id="nav-btn-overleggen" class="app-nav-btn" onclick="showView('overleggen',this)">🗓 Overleggen</button>
+  <button class="app-nav-btn active" onclick="showView('home',this)" title="Overzicht">🏠<span class="nav-lbl"> Overzicht</span></button>
+  <button id="nav-btn-weekpost" class="app-nav-btn" style="position:relative;" onclick="showView('weekpost',this)" title="Weekpost">✉️<span class="nav-lbl"> Weekpost</span><span id="wp-concept-dot" title="Er staat een concept-weekmail klaar" style="display:none;position:absolute;top:7px;right:3px;width:7px;height:7px;background:#f59e0b;border-radius:50%;"></span></button>
+  <button class="app-nav-btn" onclick="showView('werklastverdeling',this)" title="Werklastverdeling">⚖️<span class="nav-lbl"> Werklastverdeling</span></button>
+  <button class="app-nav-btn" onclick="showView('personeelskaart',this)" title="Personeelskaart">👤<span class="nav-lbl"> Personeelskaart</span></button>
+  <button class="app-nav-btn" onclick="showView('werkvoorraad',this)" title="Werkvoorraad">📈<span class="nav-lbl"> Werkvoorraad</span></button>
+  <button id="nav-btn-overleggen" class="app-nav-btn" onclick="showView('overleggen',this)" title="Overleggen">🗓<span class="nav-lbl"> Overleggen</span></button>
   <div class="app-nav-spacer"></div>
-  <button class="app-nav-status status-none" id="nav-btn-noteren" onclick="ovNoteerOpen()" title="Snel een taak, bespreekpunt of notitie vastleggen (toets N)">＋ Noteren</button>
-  <button class="app-nav-status status-none" onclick="uHandleidingOpen()" title="Gebruikshandleiding openen">📖 Handleiding</button>
-  <button class="app-nav-status status-none" id="backup-btn" onclick="fileDownloadBackup()" title="Nog geen backup gemaakt">💾 Backup<span id="backup-dot" style="display:none;width:7px;height:7px;background:#f59e0b;border-radius:50%;vertical-align:middle;margin-left:4px;"></span></button>
+  <button class="app-nav-status status-none" id="nav-btn-noteren" onclick="ovNoteerOpen()" title="Snel een taak, bespreekpunt of notitie vastleggen (toets N)">＋<span class="nav-lbl"> Noteren</span></button>
+  <button class="app-nav-status status-none" onclick="uHandleidingOpen()" title="Gebruikshandleiding openen">📖<span class="nav-lbl"> Handleiding</span></button>
+  <button class="app-nav-status status-none" id="backup-btn" onclick="fileDownloadBackup()" title="Nog geen backup gemaakt">💾<span class="nav-lbl"> Backup</span><span id="backup-dot" style="display:none;width:7px;height:7px;background:#f59e0b;border-radius:50%;vertical-align:middle;margin-left:4px;"></span></button>
   <button class="app-nav-status status-none" id="file-status" onclick="showFileOverlay()" title="Klik om databestand te beheren"><span id="file-status-text">📁 Geen bestand</span></button>
 </div>
 <!-- MULTI-INSTANTIE WAARSCHUWING -->
@@ -1156,7 +1175,7 @@
       <div id="pk-prullenbak"></div>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn btn-ghost btn-block" onclick="pkAddKaart()">+ Teamlid toevoegen</button>
-        <button class="btn btn-ghost btn-block" onclick="pkImporteerTeam()">↗ Heel team naar werklastverdeling</button>
+        <button class="btn btn-ghost btn-block" onclick="pkImporteerTeam()">＋ Heel team naar de verdeling</button>
       </div>
     </div>
     <div class="card" style="margin-bottom:12px;cursor:pointer;" onclick="pkToggleVrijstCatSectie()">
@@ -1299,8 +1318,12 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.21';
+const TOOLKIT_VERSIE = '2026.10.22';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.22', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
+    'De <strong>navigatiebalk</strong> blijft altijd op één regel en verspringt niet meer. Op een kleiner scherm tonen de knoppen alleen hun icoon (de naam zie je als je erop wijst), zodat er nooit iets buiten beeld valt',
+    'Overal dezelfde naam voor het in de verdeling zetten van teamleden: <strong>＋ Verdeling</strong> en <strong>＋ Heel team naar de verdeling</strong>',
+  ]},
   { versie: '2026.10.21', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     '<strong>Vergadering afsluiten is terug:</strong> onderaan een overleg zet <em>✓ Vergadering afsluiten</em> de besproken punten in het archief, met de datum van de vergadering',
     'Na <strong>✓ Klaar</strong> bij een nieuwe rechter vraagt de toolkit of die meteen in de werklastverdeling moet',
@@ -1770,7 +1793,7 @@ function _homeRender() {
   homeRenderAandacht();
 
   const browserWaarschuwing = !wvFileHandle ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-family:Arial,sans-serif;font-size:13px;display:flex;align-items:flex-start;gap:12px;"><span style="font-size:18px;flex-shrink:0;">⚠️</span><div><strong>Data wordt tijdelijk opgeslagen in de browser.</strong><br>Als je de browsercache leegt of een andere browser gebruikt, ben je alle data kwijt. <button onclick="showFileOverlay()" style="background:none;border:none;color:#b45309;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">Koppel een bestand →</button></div></div>` : '';
-  const aanDeslag = pkKaarten.length === 0 ? `<div style="background:#f0fdf4;border:1px solid #16a34a;border-radius:8px;padding:14px 16px;margin-bottom:16px;font-family:Arial,sans-serif;font-size:13px;"><div style="font-weight:700;color:#14532d;margin-bottom:8px;">👋 Welkom! Begin hier:</div><ol style="margin:0;padding-left:20px;color:#166534;line-height:2;"><li><strong>Personeelskaart</strong> — voeg alle teamleden toe <button onclick="showViewByName('personeelskaart')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li><li><strong>Werklastverdeling</strong> — importeer het team en begin met verdelen <button onclick="showViewByName('werklastverdeling')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li>${wpModuleActief ? `<li><strong>Weekpost</strong> — stel je naam in en maak je eerste weekmail <button onclick="showViewByName('weekpost')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li>` : ''}</ol></div>` : '';
+  const aanDeslag = pkKaarten.length === 0 ? `<div style="background:#f0fdf4;border:1px solid #16a34a;border-radius:8px;padding:14px 16px;margin-bottom:16px;font-family:Arial,sans-serif;font-size:13px;"><div style="font-weight:700;color:#14532d;margin-bottom:8px;">👋 Welkom! Begin hier:</div><ol style="margin:0;padding-left:20px;color:#166534;line-height:2;"><li><strong>Personeelskaart</strong> — voeg alle teamleden toe <button onclick="showViewByName('personeelskaart')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li><li><strong>Werklastverdeling</strong> — zet je team in de verdeling (＋ Verdeling) en begin met verdelen <button onclick="showViewByName('werklastverdeling')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li>${wpModuleActief ? `<li><strong>Weekpost</strong> — stel je naam in en maak je eerste weekmail <button onclick="showViewByName('weekpost')" style="background:none;border:none;color:#16a34a;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;font-family:inherit;">→ open</button></li>` : ''}</ol></div>` : '';
   homeRenderNoteer();
   const bannersEl = document.getElementById('home-banners');
   if (bannersEl) bannersEl.innerHTML = aanDeslag + browserWaarschuwing;
@@ -3439,7 +3462,7 @@ function wvRechterNaam(rid) {
 function wvRenderRechters() {
   const lijst=document.getElementById('wv-rechters-lijst');
   if (!wvRechters.length) {
-    lijst.innerHTML='<div class="leeg">Nog geen rechters. Voeg teamleden toe via de <a href="#" onclick="showViewByName(\'personeelskaart\');return false;" style="color:#f59e0b;text-decoration:none;font-weight:600;">Personeelskaart</a> en gebruik ↗ om ze door te zetten.</div>';
+    lijst.innerHTML='<div class="leeg">Nog geen rechters. Voeg teamleden toe via de <a href="#" onclick="showViewByName(\'personeelskaart\');return false;" style="color:#f59e0b;text-decoration:none;font-weight:600;">Personeelskaart</a> en zet ze met <strong>＋ Verdeling</strong> in de verdeling.</div>';
     return;
   }
   // Eff. FTE = handel-eFTE (contract − vrijstellingen − neventaken, × handel%), dezelfde
@@ -9624,9 +9647,9 @@ function ovUpdateNavBadge() {
   const btn = document.getElementById('nav-btn-overleggen');
   if (!btn) return;
   const n = ovTaken.filter(t => !t.afgevinkt).length;
-  btn.innerHTML = n > 0
-    ? `🗓 Overleggen <span style="display:inline-block;background:#292524;color:#fff;font-size:10px;border-radius:10px;padding:0 6px;margin-left:4px;vertical-align:middle;line-height:1.6">${n}</span>`
-    : '🗓 Overleggen';
+  btn.innerHTML = '🗓<span class="nav-lbl"> Overleggen</span>' + (n > 0
+    ? ` <span style="display:inline-block;background:#292524;color:#fff;font-size:10px;border-radius:10px;padding:0 6px;margin-left:4px;vertical-align:middle;line-height:1.6">${n}</span>`
+    : '');
 }
 
 function ovOpslaan() {
@@ -11014,13 +11037,13 @@ document.addEventListener('keydown', function(e) {
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span><strong>Personeelskaart bekijken.</strong> Klik in het overzicht op de <strong>naam</strong> van een teamlid voor een overzichtelijke, alleen-lezen kaart met alle gegevens op één plek (FTE, handel/kanton, vrijstellingen mét omschrijving, neventaken, aandachtsgebieden, werklastverdeling en de context/bespreekpunten uit Overleggen). Je komt niet meteen in het bewerkscherm — vanuit de kaart klik je desgewenst op <kbd>✏️ Bewerken</kbd> of <kbd>🗓 Openen in Overleggen</kbd>. De kolom <strong>Vrijstellingen</strong> in het overzicht toont compact de aftrek-cijfers.</span></div>
           </div>
           <div class="hdl-card">
-            <h3>Rechter importeren naar Werklastverdeling</h3>
+            <h3>Rechter in de werklastverdeling zetten</h3>
             <p>Voeg je een nieuwe rechter toe (met handel of kanton), dan vraagt de toolkit na <kbd>✓ Klaar</kbd> of die meteen in de werklastverdeling moet: klik op <kbd>Ja, toevoegen</kbd>. Kies je <em>Nu niet</em>, dan kan het later zo:</p>
             <ol class="hdl-steps">
               <li><p>Zoek de rechter op in de personeelstabel.</p></li>
               <li><p>Klik op <kbd>＋ Verdeling</kbd> in de rij van het teamlid. De knop verdwijnt zodra het teamlid in de verdeling staat.</p></li>
             </ol>
-            <p>Of importeer het hele team in één keer: klik op <kbd>↗ Heel team naar werklastverdeling</kbd> onderaan de tabel. Nieuwe rechters worden toegevoegd, bestaande worden bijgewerkt.</p>
+            <p>Of zet het hele team in één keer in de verdeling: klik op <kbd>＋ Heel team naar de verdeling</kbd> onderaan de tabel. Nieuwe rechters worden toegevoegd, bestaande worden bijgewerkt.</p>
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span><strong>FTE, vrijstelling of naam gewijzigd?</strong> Dat loopt vanzelf door naar de Werklastverdeling; je hoeft niets bij te werken. Op het tabblad Team van de Werklastverdeling zie je onderaan wie wel op de personeelskaart staat maar nog niet in de verdeling (met een knop om toe te voegen).</span></div>
           </div>
           <div class="hdl-card">
