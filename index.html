@@ -1299,8 +1299,15 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.20';
+const TOOLKIT_VERSIE = '2026.10.21';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.10.21', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
+    '<strong>Vergadering afsluiten is terug:</strong> onderaan een overleg zet <em>✓ Vergadering afsluiten</em> de besproken punten in het archief, met de datum van de vergadering',
+    'Na <strong>✓ Klaar</strong> bij een nieuwe rechter vraagt de toolkit of die meteen in de werklastverdeling moet',
+    'Rood en groen in de verdeling verschijnen pas bij minstens <strong>1,5 punt</strong> verschil, zodat kleine schommelingen in de eerste weken grijs blijven',
+    'De backup-knop wordt niet meer meteen rood bij je eerste gegevens: de herinnering telt vanaf dat moment (standaard oranje na 7, rood na 14 dagen)',
+    'Vragen die niets verwijderen hebben nu een oranje in plaats van een rode knop',
+  ]},
   { versie: '2026.10.20', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     'Ga je weg uit een open verdeling, dan vraagt de toolkit dat nog maar één keer; daarna staat bovenaan een balkje <strong>"Verdeling week … staat nog open"</strong> met <em>Terug naar verdelen</em> en <em>Week afronden</em>',
     'De schrijfkast in een nieuwe weekpost begint leeg (er stonden voorbeeldcijfers in)',
@@ -1568,11 +1575,15 @@ function uVersieToggleOud(btn) {
 }
 
 let _uBevestigCb = null;
-function uBevestig(titel, tekst, onJa, btnLabel) {
+// opties.primair: geen rode (verwijder)knop maar de gewone oranje; opties.nee: tekst van de annuleerknop
+function uBevestig(titel, tekst, onJa, btnLabel, opties) {
   _uBevestigCb = onJa;
   document.getElementById('ubevestig-titel').textContent = titel;
   document.getElementById('ubevestig-tekst').innerHTML = tekst;
-  document.getElementById('ubevestig-ja-btn').textContent = btnLabel || 'Verwijderen';
+  const ja = document.getElementById('ubevestig-ja-btn');
+  ja.textContent = btnLabel || 'Verwijderen';
+  ja.className = 'btn ' + (opties && opties.primair ? 'btn-primary' : 'btn-danger');
+  document.getElementById('ubevestig-nee-btn').textContent = (opties && opties.nee) || 'Annuleren';
   document.getElementById('ubevestig-overlay').style.display = 'flex';
 }
 function uBevestigJa() {
@@ -2063,7 +2074,7 @@ function showView(name, btn) {
   if (wvVerdelingActief && name !== 'werklastverdeling' && !_wvVerlatenGevraagd) {
     uBevestig('Verdeling verlaten',
       `Verdeling week <strong>${wvVerdelingWeek}</strong> is nog bezig. Wil je de werklastverdeling verlaten? De verdeling blijft openstaan; bovenaan zie je een herinnering.`,
-      () => { _wvVerlatenGevraagd = true; _showView(name, btn); }, 'Verlaten');
+      () => { _wvVerlatenGevraagd = true; _showView(name, btn); }, 'Verlaten', { primair: true, nee: 'Blijven' });
     return;
   }
   _showView(name, btn);
@@ -5626,8 +5637,12 @@ function _wvHandelVerdeelDataBereken() {
 // Oordeel over één regel uit wvHandelVerdeelData / wvKantonVerdeelData:
 // 'boven' (overbelast), 'onder' (ruimte) of '' (rond het evenredige aandeel).
 // Dit is het énige criterium — ranglijst, ⚠, spreiding, meldingen en overzicht gebruiken het.
+// Minimaal puntenverschil voor rood/groen: kleine schommelingen (bijv. in de eerste weken)
+// blijven grijs, ook als het percentage buiten de marge valt.
+const WV_MIN_PUNTEN_SIGNAAL = 1.5;
 function wvMargeStatus(d) {
   if (!d) return '';
+  if (Math.abs(d.verschil) < WV_MIN_PUNTEN_SIGNAAL) return '';
   const marge = wvBelastingMarge * Math.max(d.normaal, 1);
   return d.verschil > marge ? 'boven' : d.verschil < -marge ? 'onder' : '';
 }
@@ -7017,6 +7032,12 @@ function pkKlaarEdit() {
   pkIsNieuwKaart = false;
   pkNieuwVrijst = null;
   pkRender();
+  // Nieuwe rechter met handel of kanton: meteen aanbieden om in de verdeling te zetten
+  if (wasNieuw && k && pkRolVoorWV(k) === 'rechter' && ((parseFloat(k.handel_pct) || 0) > 0 || (parseFloat(k.kanton_pct) || 0) > 0) && !wvRechterVoorKaart(k)) {
+    uBevestig('Ook in de werklastverdeling?',
+      `Wil je <strong>${wvEsc(k.naam)}</strong> meteen in de werklastverdeling zetten? Dan kun je direct zaken toedelen. Dit kan later ook met <strong>＋ Verdeling</strong>.`,
+      () => pkImporteerNaarWV(k.id), 'Ja, toevoegen', { primair: true, nee: 'Nu niet' });
+  }
 }
 
 
@@ -7263,7 +7284,7 @@ function pkImporteerTeam() {
   if (nieuw.length)    delen.push(`${nieuw.length} nieuw`);
   if (bestaand.length) delen.push(`${bestaand.length} bijwerken`);
   const msg = `${kandidaten.length} teamleden worden verwerkt${delen.length ? ` (${delen.join(', ')})` : ''}.`;
-  uBevestig('Heel team importeren', msg, () => _pkImporteerTeamDoen(kandidaten), 'Importeren');
+  uBevestig('Heel team naar de werklastverdeling', msg, () => _pkImporteerTeamDoen(kandidaten), 'Naar de verdeling', { primair: true });
 }
 
 function _pkImporteerTeamDoen(kandidaten) {
@@ -7592,7 +7613,14 @@ function updateBackupDot() {
   const dot = document.getElementById('backup-dot');
   const btn = document.getElementById('backup-btn');
   if (!dot || !btn) return;
-  const d = backupDagenGeleden();
+  let d = backupDagenGeleden();
+  // Nog nooit een backup: tellen vanaf het moment dat er voor het eerst gegevens waren
+  // (dus niet meteen rood bij het eerste teamlid)
+  if (d === null && uHeeftData()) {
+    let start = null;
+    try { start = localStorage.getItem('teamvz_eerste_gegevens'); if (!start) { start = uDatumISO(); localStorage.setItem('teamvz_eerste_gegevens', start); } } catch(e) {}
+    if (start) d = Math.max(0, Math.round((new Date(uDatumISO() + 'T12:00:00') - new Date(start + 'T12:00:00')) / 86400000));
+  }
   const nooit = d === null;
   // Verse start zonder gegevens: nog niets te verliezen, dus geen alarmstip.
   if (nooit && !uHeeftData()) {
@@ -10059,7 +10087,11 @@ function ovKaartHtml(type) {
       })()}
     </div>`;
 
-  const sluitBtn = '';
+  // Besproken punten archiveren als vergadering van vandaag (terug te lezen bij Archief)
+  const nBesproken = ovBespreekpunten.filter(b => b.overleg_id === id && b.besproken && !b.archief_id).length;
+  const sluitBtn = nBesproken ? `<div style="padding:10px 14px;border-top:1px solid #eee;margin:0 -14px;text-align:right;">
+      <button class="btn btn-ghost btn-klein" style="padding:5px 12px;" onclick="ovSluitVergadering('${id}')" title="Zet de besproken punten in het archief, met de datum van vandaag">✓ Vergadering afsluiten (${nBesproken} besproken)</button>
+    </div>` : '';
 
   return `
     <div id="ov-kaart-${id}" style="border:1px solid #e7e0d8;border-radius:10px;margin-bottom:8px;overflow:hidden">
@@ -10095,7 +10127,7 @@ function ovArchievenbijType(overlegId) {
         ${vergaderingen.map(v => {
           const punten = ovBespreekpunten.filter(b => b.archief_id === v.id);
           return `<div style="margin-bottom:12px">
-            <div style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#bbb;margin-bottom:4px">${v.datum}</div>
+            <div style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:#a8a29e;margin-bottom:4px">Vergadering ${wvEsc(new Date(v.datum + 'T12:00:00').toLocaleDateString('nl-NL', { day:'numeric', month:'long', year:'numeric' }))}</div>
             ${punten.map(b => `
               <div style="display:flex;align-items:flex-start;gap:8px;padding:3px 0">
                 <span style="font-size:1em;color:#ddd;flex-shrink:0;line-height:1.5">–</span>
@@ -10566,7 +10598,7 @@ function ovSluitVergadering(overlegId) {
       ovOpslaan();
       ovRenderKaart(overlegId);
       uLog('ov-vergadering-afgesloten', { overleg_id: overlegId, aantal_punten: besproken.length });
-    }, 'Archiveren');
+    }, 'Archiveren', { primair: true });
 }
 
 function ovVoegTypeToe() {
@@ -10783,7 +10815,7 @@ document.addEventListener('keydown', function(e) {
     <div id="ubevestig-titel" style="font-family:Georgia,serif;font-size:15px;font-weight:700;color:#1c1917;margin-bottom:10px;"></div>
     <div id="ubevestig-tekst" style="font-family:Arial,sans-serif;font-size:13px;color:#44403c;line-height:1.6;margin-bottom:20px;"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;">
-      <button class="btn" onclick="uBevestigNee()">Annuleren</button>
+      <button class="btn" id="ubevestig-nee-btn" onclick="uBevestigNee()">Annuleren</button>
       <button class="btn btn-danger" id="ubevestig-ja-btn" onclick="uBevestigJa()">Verwijderen</button>
     </div>
   </div>
@@ -10983,7 +11015,7 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>Rechter importeren naar Werklastverdeling</h3>
-            <p>Nadat je een rechter hebt toegevoegd, moet je deze eenmalig importeren naar de Werklastverdeling.</p>
+            <p>Voeg je een nieuwe rechter toe (met handel of kanton), dan vraagt de toolkit na <kbd>✓ Klaar</kbd> of die meteen in de werklastverdeling moet: klik op <kbd>Ja, toevoegen</kbd>. Kies je <em>Nu niet</em>, dan kan het later zo:</p>
             <ol class="hdl-steps">
               <li><p>Zoek de rechter op in de personeelstabel.</p></li>
               <li><p>Klik op <kbd>＋ Verdeling</kbd> in de rij van het teamlid. De knop verdwijnt zodra het teamlid in de verdeling staat.</p></li>
@@ -11044,7 +11076,7 @@ document.addEventListener('keydown', function(e) {
             <p><strong>Hoe het eerlijke aandeel wordt berekend.</strong> De verdeling kijkt naar de <strong>openstaande</strong> zaken. Elke zaak telt mee in de week waarin hij is toegedeeld. De punten van die week worden verdeeld over de rechters die toen in het handelsteam werkten, naar hun <strong>handel-FTE</strong>: de FTE min vrijstellingen en neventaken, maal het handelpercentage op de personeelskaart. Wie later is begonnen of vanaf een datum meer of minder is gaan werken, telt pas mee vanaf die datum.</p>
             <p><strong>Afwezigheid.</strong> Op het tabblad <strong>Team</strong> voer je per rechter afwezigheidsperiodes in (begin- en einddatum), of je zet het vinkje <em>afwezig</em> (dat geldt vanaf het moment van aanvinken; bij uitvinken wordt het vanzelf een periode met datums). Een afwezigheid van <strong>minstens een hele week</strong> (5 werkdagen) verlaagt het eerlijke aandeel over die weken: wie terugkomt staat gewoon "rond" en hoeft niets in te halen. Kortere afwezigheid blijft zichtbaar maar verandert de verdeling niet. Een afwezigheid die nog moet beginnen, verandert de stand niet: je ziet in de ranglijst en bij het advies alleen een hint als <em>"🏖 afwezig vanaf 9 nov (2 wk)"</em>. Wie vandaag afwezig is, staat wel in de ranglijst maar krijgt geen advies.</p>
             <p><strong>Zaken afsluiten verandert de stand.</strong> Omdat alleen openstaande zaken tellen, verschuiven de percentages als je een stapel zaken afsluit: wie veel heeft afgerond, komt lager te staan en krijgt de komende tijd weer wat meer. Dat is zo bedoeld — de verdeling gaat over de werkvoorraad van nu.</p>
-            <p>Rechts in de ranglijst zie je per rechter de afwijking van zijn/haar eerlijke aandeel als <strong>percentage</strong> (vet), met de punten klein erachter. Het percentage vergelijk je direct met de <strong>marge</strong> (standaard ±15%, instelbaar bij Instellingen): daarboven kleurt de rij rood, daaronder groen. De twee streepjes in het balkje markeren die marge. Bij rechters met nog weinig punten kan een klein verschil een hoog percentage geven; kijk dan ook naar de punten.</p>
+            <p>Rechts in de ranglijst zie je per rechter de afwijking van zijn/haar eerlijke aandeel als <strong>percentage</strong> (vet), met de punten klein erachter. Het percentage vergelijk je direct met de <strong>marge</strong> (standaard ±15%, instelbaar bij Instellingen): daarboven kleurt de rij rood, daaronder groen — maar pas als het verschil ook minstens 1,5 punt is, zodat kleine schommelingen (bijvoorbeeld in de eerste weken) grijs blijven. De twee streepjes in het balkje markeren die marge. Bij rechters met nog weinig punten kan een klein verschil een hoog percentage geven; kijk dan ook naar de punten.</p>
             <p>Staat bij een rechter "telt mee vanaf" (de datum bij <em>Telt mee vanaf</em> op de personeelskaart), dan telt die pas mee vanaf die datum. Oudere zaken die hij of zij toch heeft (bijvoorbeeld overgenomen), tellen neutraal: niet mee als achterstand en niet als overbelasting.</p>
             <p>Het <strong>advies</strong> onder de rechterkeuze, het <strong>⚠-symbool</strong> in de keuzelijst, de <strong>ranglijst</strong>, het <strong>teamoverzicht</strong>, de <strong>snapshot-trend</strong> en op het startscherm de <strong>meldingen</strong>, <strong>Spreiding rechters</strong>, <strong>Intensiteit</strong> en <strong>Handel &amp; kanton per rechter</strong> gebruiken allemaal dezelfde berekening en geven dus altijd hetzelfde oordeel. Voor kanton geldt hetzelfde met de kanton-ranglijst.</p>
           </div>
@@ -11145,7 +11177,8 @@ document.addEventListener('keydown', function(e) {
           <div class="hdl-card">
             <h3>Bespreekpunten bijhouden</h3>
             <p>Typ een punt in het invoerveld en druk op Enter. Druk <kbd>Escape</kbd> in het invoerveld om het te legen. Heb je op het tabblad Overleggen een overleg opengeklapt, dan springt <kbd>N</kbd> direct naar het invoerveld van dat overleg.</p>
-            <p style="margin-top:6px">Klik <strong>○</strong> om een punt als besproken te markeren — of Tab naar de knop en druk Space/Enter. Focus springt automatisch naar het volgende punt. Via <strong>↩</strong> zet je een besproken punt terug.</p>
+            <p style="margin-top:6px">Klik <strong>○</strong> om een punt als besproken te markeren — of Tab naar de knop en druk Space/Enter. Focus springt automatisch naar het volgende punt. Via <strong>↩</strong> zet je een besproken punt terug, met 🗑 verwijder je het.</p>
+            <p style="margin-top:6px"><strong>Vergadering afsluiten:</strong> na het overleg klik je onderaan de kaart op <kbd>✓ Vergadering afsluiten</kbd>. De besproken punten gaan dan naar het <strong>Archief</strong> van dat overleg, met de datum van de vergadering; openstaande punten blijven staan voor de volgende keer.</p>
             <p style="margin-top:6px"><strong>Bewerken:</strong> klik op de tekst van een punt om het inline te bewerken. Druk Enter of klik buiten het veld om op te slaan, Escape of ✕ om te annuleren.</p>
           </div>
           <div class="hdl-card">
@@ -11258,7 +11291,7 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>Wijzigingen in Personeelskaart doorvoeren naar Werklastverdeling</h3>
-            <p>Wijzig je de FTE, vrijstellingen of naam van een rechter in de Personeelskaart, dan neemt de Werklastverdeling dat automatisch over. Een nieuw teamlid komt pas in de verdeling als je het daar zelf aan toevoegt (knop <kbd>＋ Verdeling</kbd> op de Personeelskaart, of onderaan het tabblad Team).</p>
+            <p>Wijzig je de FTE, vrijstellingen of naam van een rechter in de Personeelskaart, dan neemt de Werklastverdeling dat automatisch over. Een nieuw teamlid komt in de verdeling als je dat na <kbd>✓ Klaar</kbd> bevestigt, of later met de knop <kbd>＋ Verdeling</kbd> op de Personeelskaart (of onderaan het tabblad Team).</p>
           </div>
           <div class="hdl-card">
             <h3>Bestand elke keer opnieuw koppelen</h3>
