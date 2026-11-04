@@ -1165,6 +1165,11 @@
           <div class="field"><label>Extra punten VZ</label><input type="number" id="wv-mk-vz-bonus" min="0" step="0.25" onchange="wvUpdateMkVzBonus(this.value)"></div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-title">Vooruitblik afwezigheid</div>
+        <div class="card-hint">Een zaak die je nu toedeelt, moet in de komende maanden gedaan worden. Is iemand in die periode (deels) afwezig, dan krijgt die nu al naar verhouding minder. Kies hoe ver vooruit de toolkit kijkt: ongeveer hoe lang een zaak bij een rechter ligt. Hoe langer, hoe kleiner het effect van een korte afwezigheid. Afwezigheid korter dan een week telt niet mee; 0 = uit.</div>
+        <div class="field" style="max-width:200px;margin-bottom:0;"><label>Vooruitblik (maanden)</label><input type="number" id="wv-vooruitblik" min="0" max="12" step="1" onchange="wvUpdateVooruitblik(this.value)"></div>
+      </div>
       <div class="card" style="margin-bottom:0;">
         <div class="card-title">Belastingdrempel</div>
         <div class="card-hint">Hoeveel procent iemand van het evenredige aandeel mag afwijken voordat de rij rood (te veel) of groen (ruimte) kleurt. Rood en groen verschijnen pas bij minstens 1,5 punt verschil.</div>
@@ -1343,8 +1348,12 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.11.2';
+const TOOLKIT_VERSIE = '2026.11.3';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.11.3', datum: 'november 2026', releasedatum: '04-11-2026', items: [
+    '<strong>Afwezigheid telt vooruit mee:</strong> wie in de komende maanden langer dan een week afwezig is, krijgt nu al naar verhouding minder zaken, want toegedeelde zaken moeten in die tijd gedaan worden. Verleng je een afwezigheid, dan stijgt de werklast van die rechter meteen en gaat het advies eerst naar anderen. Hoe ver vooruit de toolkit kijkt (standaard 5 maanden) stel je in onder Instellingen → Vooruitblik afwezigheid',
+    'Pt/eFTE op het tabblad Team rekent nu met de beschikbare tijd (🏖 = er is afwezigheid in de vooruitblik). Bij de afwezigheidsperiodes staat wat de afwezigheid op dit moment doet',
+  ]},
   { versie: '2026.11.2', datum: 'november 2026', releasedatum: '04-11-2026', items: [
     'MK-overzicht: met <strong>🎨 Kleuren aanpassen</strong> kies je zelf vanaf hoeveel maanden een zaak als <em>let op</em> en als <em>te oud</em> wordt gekleurd, en in welke kleur',
   ]},
@@ -3074,6 +3083,10 @@ let pkPrullenbak         = [];
 let wvGewichten        = { B: 1.0, C: 1.5, D: 2.0 };
 let wvMkVzBonus        = 0.5;
 let wvBelastingMarge   = 0.15;
+// Vooruitblik (maanden): afwezigheid in deze periode verkleint het eerlijke aandeel nu al,
+// omdat toegedeelde zaken in die tijd gedaan moeten worden. 0 = uit.
+const WV_VOORUITBLIK_STANDAARD = 5;
+let wvVooruitblikMaanden = WV_VOORUITBLIK_STANDAARD;
 // MK-overzicht: vanaf hoeveel maanden een zaak 'let op' / 'te oud' kleurt, en in welke kleur
 const WV_MK_LEEFTIJD_STANDAARD = { letop: 6, letopKleur: '#d97706', oud: 12, oudKleur: '#dc2626' };
 let wvMkLeeftijd       = { ...WV_MK_LEEFTIJD_STANDAARD };
@@ -3112,6 +3125,7 @@ function wvOpslaan() {
   lsZet('teamvz_belasting_marge', JSON.stringify(wvBelastingMarge));
   lsZet('teamvz_belasting_kleur', JSON.stringify({onder:wvKleurOnder,rond:wvKleurRond,boven:wvKleurBoven}));
   lsZet('teamvz_mk_leeftijd', JSON.stringify(wvMkLeeftijd));
+  lsZet('teamvz_vooruitblik', JSON.stringify(wvVooruitblikMaanden));
   lsZet('teamvz_prullenbak', JSON.stringify({zaken:wvZakenPrullenbak,pk:pkPrullenbak}));
   lsZet('teamvz_kanton', JSON.stringify(_kantonState()));
   lsZet('teamvz_modules', JSON.stringify({ weekpost: wpModuleActief }));
@@ -3388,12 +3402,33 @@ function wvAfwezigHint(r) {
   const duur = wd >= 5 ? Math.max(1, Math.round(wd / 5)) + ' wk' : wd + (wd === 1 ? ' dag' : ' dagen');
   return '🏖 afwezig vanaf ' + kort(p.van) + ' (' + duur + ')';
 }
+// Vooruitblik: welk deel van de werkdagen in de komende wvVooruitblikMaanden iemand
+// beschikbaar is (1 = altijd, 0,85 = 15% afwezig). Telt dezelfde afwezigheid als de
+// verdeling (minstens een hele week); het vinkje zonder einddatum telt niet vooruit,
+// want hoe lang dat duurt is onbekend.
+function wvVooruitblik(r, perioden) {
+  const vandaag = uDatumISO();
+  if (!(wvVooruitblikMaanden > 0)) return { factor: 1, weg: 0, totaal: 0, tot: vandaag };
+  const eind = new Date(vandaag + 'T12:00:00'); eind.setMonth(eind.getMonth() + wvVooruitblikMaanden);
+  const tot = uDatumISO(eind);
+  const bekend = (perioden || wvTellendeAfwezigheid(r)).filter(p => p.tot !== '9999-12-31' && p.tot > vandaag);
+  let totaal = 0, weg = 0;
+  for (let d = wvDatumPlus(vandaag, 1); d <= tot; d = wvDatumPlus(d, 1)) {
+    if (!wvIsWerkdag(d)) continue;
+    totaal++;
+    if (bekend.some(p => d >= p.van && d <= p.tot)) weg++;
+  }
+  return { factor: totaal ? (totaal - weg) / totaal : 1, weg, totaal, tot };
+}
+
 // De evenredige verdeling — één berekening voor handel en kanton.
 // Elke openstaande zaak telt in de week waarin hij is toegedeeld (zaakdatum; zonder datum:
 // deze week). De punten van een week worden verdeeld over de rechters die toen in het team
 // werkten, naar eFTE × aandeel (handel% of kanton%) × aanwezige werkdagen in die week.
 // Punten van iemand die die week (nog) niet meetelde — bijv. geïmporteerde zaken van vóór
-// de aanstelling — vallen neutraal uit. Toekomstige afwezigheid verandert niets.
+// de aanstelling — vallen neutraal uit. Daarna de vooruitblik: wie in de komende maanden
+// afwezig is, krijgt naar rato een kleiner deel van die verdeelde punten (het teamtotaal
+// blijft gelijk), want de toegedeelde zaken moeten in die tijd gedaan worden.
 // items: [{ datum, rid, pt }]; puntenVoor(rid) = de huidige punten (zelfde bron als elders).
 function wvEvenredigAandeel(team, items, aandeelVan, puntenVoor) {
   const vandaag = uDatumISO();
@@ -3408,7 +3443,8 @@ function wvEvenredigAandeel(team, items, aandeelVan, puntenVoor) {
     if (!perWeek.has(wk)) perWeek.set(wk, []);
     perWeek.get(wk).push(it);
   }
-  const normaal = new Map(team.map(r => [r.id, 0]));
+  const normaal = new Map(team.map(r => [r.id, 0]));   // neutraal vallende punten
+  const verdeeld = new Map(team.map(r => [r.id, 0]));  // aandeel uit de weekverdeling
   for (const [wk, lijst] of perWeek) {
     // Werkdagen van die week (deze week: tot en met vandaag)
     const dagen = [];
@@ -3426,13 +3462,21 @@ function wvEvenredigAandeel(team, items, aandeelVan, puntenVoor) {
       if (totG > 0 && gewicht.get(it.rid) > 0) pool += it.pt;
       else normaal.set(it.rid, normaal.get(it.rid) + it.pt); // neutraal
     }
-    if (totG > 0) for (const r of team) normaal.set(r.id, normaal.get(r.id) + pool * gewicht.get(r.id) / totG);
+    if (totG > 0) for (const r of team) verdeeld.set(r.id, verdeeld.get(r.id) + pool * gewicht.get(r.id) / totG);
+  }
+  const vooruit = new Map(team.map(r => [r.id, wvVooruitblik(r, afw.get(r.id))]));
+  const somVerdeeld = [...verdeeld.values()].reduce((a, b) => a + b, 0);
+  const somGewogen = team.reduce((s, r) => s + verdeeld.get(r.id) * vooruit.get(r.id).factor, 0);
+  const schaal = somGewogen > 0 ? somVerdeeld / somGewogen : null;
+  for (const r of team) {
+    const v = schaal === null ? verdeeld.get(r.id) : verdeeld.get(r.id) * vooruit.get(r.id).factor * schaal;
+    normaal.set(r.id, normaal.get(r.id) + v);
   }
   const data = team.map(r => {
     const eFte = wvEFteOp(r, vandaag) * aandeel.get(r.id);
     const huidig = puntenVoor(r.id);
     const nml = normaal.get(r.id);
-    return { r, eFte, huidig, normaal: nml, verschil: huidig - nml, afwezig: wvIsAfwezig(r) };
+    return { r, eFte, huidig, normaal: nml, verschil: huidig - nml, afwezig: wvIsAfwezig(r), vooruit: vooruit.get(r.id) };
   }).sort((a, b) => a.verschil - b.verschil);
   return {
     team, data,
@@ -3586,7 +3630,10 @@ function wvRenderRechters() {
   const zichtbaar = rechtersZichtbaar; // used below for per-rechter rows; plv/rio appended after
   const maakRij=r=>{
     const efteNum=wvHandelEFte(r);
-    const intens=efteNum>0?wvPuntenVoor(r.id)/efteNum:null;
+    // Pt/eFTE per beschikbare tijd: met afwezigheid in de vooruitblik stijgt de werklast
+    const vb = vd?.data.find(d => d.r.id === r.id)?.vooruit || wvVooruitblik(r);
+    const efteBeschikbaar = efteNum * vb.factor;
+    const intens=efteBeschikbaar>0?wvPuntenVoor(r.id)/efteBeschikbaar:null;
     const overbelast=bovenMarge.has(r.id);
     const punten=wvPuntenVoor(r.id);
     const totVrijst=(r.vrijstellingen||[]).reduce((s,v)=>s+(parseFloat(v.fte)||0),0);
@@ -3594,7 +3641,9 @@ function wvRenderRechters() {
     const vrijstrTekst=(r.vrijstellingen||[]).length?`−${totVrijst.toFixed(2).replace('.',',')} FTE`:'—';
     const isPlvRioR=r.rol==='rio'||r.rol==='plaatsvervanger';
     const rolBadge=r.rol==='rio'?' <span style="font-family:Arial,sans-serif;font-size:9px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:3px;padding:1px 5px;">Rio</span>':r.rol==='plaatsvervanger'?' <span style="font-family:Arial,sans-serif;font-size:9px;background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe;border-radius:3px;padding:1px 5px;">Plv.</span>':'';
-    const intensTekst=isPlvRioR?'—':intens!==null?(intens.toFixed(2).replace('.',',')+(overbelast?' ⚠️':'')):'—';
+    const vbWeken = Math.round(vb.weg / 5 * 10) / 10;
+    const vbTitel = vb.weg ? `Gerekend met de beschikbare tijd: ${String(vbWeken).replace('.', ',')} van de komende ${Math.round(vb.totaal / 5)} weken afwezig` : '';
+    const intensTekst=isPlvRioR?'—':intens!==null?(intens.toFixed(2).replace('.',',')+(vb.weg?' 🏖':'')+(overbelast?' ⚠️':'')):(efteNum>0&&vb.factor===0?'afwezig':'—');
     const isNuAfwezig = wvIsAfwezig(r);
     const periodes = r.afwezigPeriodes || [];
     const vandaag = uDatumISO();
@@ -3608,6 +3657,7 @@ function wvRenderRechters() {
     const periodeSubRij = '<tr id="wv-periodes-' + r.id + '" style="display:none;"><td colspan="7" style="padding:6px 16px 8px;background:#fffbeb;border-bottom:1px solid #fde68a;">' +
       '<div style="font-family:Arial,sans-serif;font-size:11px;font-weight:600;color:#78350f;margin-bottom:4px;">Afwezigheidsperiodes</div>' +
       (periodesHtml || '<div style="font-size:11px;color:#a8a29e;margin-bottom:4px;">Nog geen periodes.</div>') +
+      (vb.weg ? '<div style="font-size:11px;color:#78350f;margin-top:4px;">↳ Telt nu al mee: ' + String(vbWeken).replace('.', ',') + ' van de komende ' + Math.round(vb.totaal / 5) + ' weken afwezig, dus ' + Math.round((1 - vb.factor) * 100) + '% minder beschikbare tijd. Het eerlijke aandeel is daarom kleiner en het advies gaat eerst naar anderen.</div>' : '') +
       '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">' +
       '<input type="date" id="wv-pvan-' + r.id + '" style="font-size:11px;padding:2px 6px;border:1px solid #d4cfc8;border-radius:4px;">' +
       '<span style="font-size:11px;color:#78716c;">t/m</span>' +
@@ -3624,7 +3674,7 @@ function wvRenderRechters() {
       '<td>' + (isPlvRioR?'—':(parseFloat(r.fte)||0).toFixed(2).replace('.',',')) + '</td>' +
       '<td style="font-weight:600;">' + (isPlvRioR?'—':efteNum.toFixed(2).replace('.',',')) + '</td>' +
       '<td style="text-align:right;">' + punten.toFixed(1).replace('.',',') + '</td>' +
-      '<td style="text-align:right;' + (overbelast?'font-weight:600;color:'+wvKleurBoven+';':'') + '">' + intensTekst + '</td>' +
+      '<td style="text-align:right;' + (overbelast?'font-weight:600;color:'+wvKleurBoven+';':'') + '"' + (vbTitel?' title="'+wvEsc(vbTitel)+'"':'') + '>' + intensTekst + '</td>' +
       '<td style="font-size:11px;color:#78716c;" title="' + (vrijstrDetail?wvEsc(vrijstrDetail):'') + '">' + (isPlvRioR?'—':wvEsc(vrijstrTekst)) + '</td>' +
       '<td><label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;">' +
       '<input type="checkbox"' + (isNuAfwezig?' checked':'') + ' onchange="wvToggleAfwezig(\'' + r.id + '\',this.checked)" style="accent-color:#f59e0b;cursor:pointer;width:14px;height:14px;flex-shrink:0;">' +
@@ -4947,6 +4997,8 @@ function wvRenderGewichtenInputs() {
   if (bonusEl) bonusEl.value = wvMkVzBonus;
   const margeEl = document.getElementById('wv-belasting-marge');
   if (margeEl) margeEl.value = Math.round(wvBelastingMarge * 100);
+  const vbEl = document.getElementById('wv-vooruitblik');
+  if (vbEl) vbEl.value = wvVooruitblikMaanden;
   const kleurOnderEl = document.getElementById('wv-kleur-onder');
   if (kleurOnderEl) kleurOnderEl.value = wvKleurOnder;
   const kleurRondEl = document.getElementById('wv-kleur-rond');
@@ -4974,6 +5026,15 @@ function wvUpdateBelastingMarge(val) {
   const inp = document.getElementById('wv-belasting-marge');
   if (inp) inp.value = Math.round(wvBelastingMarge * 100);
   uLog('instelling-gewijzigd', { instelling: 'belasting-marge' });
+  wvOpslaan();
+  wvRenderRechters(); wvRenderOverzicht();
+}
+
+function wvUpdateVooruitblik(val) {
+  wvVooruitblikMaanden = Math.min(12, Math.max(0, Math.round(uGetal(val, WV_VOORUITBLIK_STANDAARD))));
+  const inp = document.getElementById('wv-vooruitblik');
+  if (inp) inp.value = wvVooruitblikMaanden;
+  uLog('instelling-gewijzigd', { instelling: 'vooruitblik' });
   wvOpslaan();
   wvRenderRechters(); wvRenderOverzicht();
 }
@@ -8206,6 +8267,7 @@ function stateSerialize() {
     belastingMarge:     wvBelastingMarge,
     belastingKleur:     {onder:wvKleurOnder,rond:wvKleurRond,boven:wvKleurBoven},
     mkLeeftijd:         wvMkLeeftijd,
+    vooruitblik:        wvVooruitblikMaanden,
     personeelskaarten:  pkKaarten,
     neventakencat:      pkCategorieen,
     weekpost:           wpGetState(),
@@ -8235,7 +8297,7 @@ function stateApply(data) {
   ovOverlegtypen=[]; ovBespreekpunten=[]; ovVergaderingen=[]; ovTaken=[]; ovWeekpostNotities=[];
   wvGewichten={B:1.0,C:1.5,D:2.0}; wvMkVzBonus=0.5; wvBelastingMarge=0.15;
   wvKleurOnder='#16a34a'; wvKleurRond='#d97706'; wvKleurBoven='#dc2626';
-  wvMkLeeftijd={ ...WV_MK_LEEFTIJD_STANDAARD };
+  wvMkLeeftijd={ ...WV_MK_LEEFTIJD_STANDAARD }; wvVooruitblikMaanden=WV_VOORUITBLIK_STANDAARD;
   wvKantonActief=false; wvKantonGewichten={eenvoudig:1.0,normaal:1.5,complex:2.0};
   wvKantonCategorieen=[]; wvPakketTypes=[]; wvPakketten=[];
   wpModuleActief=true;
@@ -8282,6 +8344,7 @@ function stateApply(data) {
   if (data.mkVzBonus != null)       wvMkVzBonus       = data.mkVzBonus;
   if (data.belastingMarge != null)  wvBelastingMarge  = data.belastingMarge;
   if (data.belastingKleur) { const k=data.belastingKleur; wvKleurOnder=k.onder||wvKleurOnder; wvKleurRond=k.rond||wvKleurRond; wvKleurBoven=k.boven||wvKleurBoven; }
+  if (data.vooruitblik != null) wvVooruitblikMaanden = Math.min(12, Math.max(0, Math.round(Number(data.vooruitblik) || 0)));
   if (data.mkLeeftijd) wvMkLeeftijd = { ...WV_MK_LEEFTIJD_STANDAARD, ...data.mkLeeftijd };
   if (data.weekpost)   wpLaadState(data.weekpost);
   if (Array.isArray(data.overlegtypen))   ovOverlegtypen   = data.overlegtypen;
@@ -8876,7 +8939,7 @@ const LS_VELDEN = [
   ['teamvz_vrijstellingcats','vrijstellingcats'], ['teamvz_verdeelweken','verdeelweken'],
   ['teamvz_gewichten','gewichten'], ['teamvz_mk_vz_bonus','mkVzBonus'],
   ['teamvz_belasting_marge','belastingMarge'], ['teamvz_belasting_kleur','belastingKleur'],
-  ['teamvz_mk_leeftijd','mkLeeftijd'],
+  ['teamvz_mk_leeftijd','mkLeeftijd'], ['teamvz_vooruitblik','vooruitblik'],
   ['teamvz_personeelskaarten','personeelskaarten'], ['teamvz_neventaken_cat','neventakencat'],
   ['teamvz_weekpost','weekpost'], ['teamvz_weekmails','weekmails'],
   ['teamvz_wistjedatarchief','wistjedatarchief'], ['teamvz_wp_med_sjablonen','medsjablonen'],
@@ -11455,7 +11518,8 @@ document.addEventListener('keydown', function(e) {
           <div class="hdl-card">
             <h3>Afwezigheid en de evenredige verdeling</h3>
             <p><strong>Hoe het eerlijke aandeel wordt berekend.</strong> De verdeling kijkt naar de <strong>openstaande</strong> zaken. Elke zaak telt mee in de week waarin hij is toegedeeld. De punten van die week worden verdeeld over de rechters die toen in het handelsteam werkten, naar hun <strong>handel-FTE</strong>: de FTE min vrijstellingen en neventaken, maal het handelpercentage op de personeelskaart. Wie later is begonnen of vanaf een datum meer of minder is gaan werken, telt pas mee vanaf die datum.</p>
-            <p><strong>Afwezigheid.</strong> Op het tabblad <strong>Team</strong> voer je per rechter afwezigheidsperiodes in (begin- en einddatum), of je zet het vinkje <em>afwezig</em> (dat geldt vanaf het moment van aanvinken; bij uitvinken wordt het vanzelf een periode met datums). Een afwezigheid van <strong>minstens een hele week</strong> (5 werkdagen) verlaagt het eerlijke aandeel over die weken: wie terugkomt staat gewoon "rond" en hoeft niets in te halen. Kortere afwezigheid blijft zichtbaar maar verandert de verdeling niet. Een afwezigheid die nog moet beginnen, verandert de stand niet: je ziet in de ranglijst en bij het advies alleen een hint als <em>"🏖 afwezig vanaf 9 nov (2 wk)"</em>. Wie vandaag afwezig is, staat wel in de ranglijst maar krijgt geen advies.</p>
+            <p><strong>Afwezigheid.</strong> Op het tabblad <strong>Team</strong> voer je per rechter afwezigheidsperiodes in (begin- en einddatum), of je zet het vinkje <em>afwezig</em> (dat geldt vanaf het moment van aanvinken; bij uitvinken wordt het vanzelf een periode met datums). Een afwezigheid van <strong>minstens een hele week</strong> (5 werkdagen) verlaagt het eerlijke aandeel over die weken: wie terugkomt staat gewoon "rond" en hoeft niets in te halen. Kortere afwezigheid blijft zichtbaar maar verandert de verdeling niet. Wie vandaag afwezig is, staat wel in de ranglijst maar krijgt geen advies.</p>
+            <p><strong>Vooruitblik.</strong> Een zaak die je nu toedeelt, moet in de komende maanden gedaan worden. Daarom telt afwezigheid die nog moet komen ook al mee: wie in de vooruitblik (standaard <strong>5 maanden</strong>, in te stellen onder <strong>Instellingen</strong>) bijvoorbeeld 2 weken weg is, heeft ongeveer 10% minder tijd. Diens eerlijke aandeel is dan kleiner, de werklast (Pt/eFTE en het percentage in de ranglijst) stijgt en het advies gaat eerst naar anderen. Verleng je een afwezigheid, dan zie je dat meteen terug. Een vrije dag of een paar dagen verandert niets (minder dan een week telt niet mee), en het vinkje <em>afwezig</em> zonder einddatum telt niet vooruit. Op het tabblad Team zie je bij <kbd>📅 periodes</kbd> wat de afwezigheid nu doet; bij Pt/eFTE staat dan een 🏖. Zet de vooruitblik op 0 om dit uit te schakelen.</p>
             <p><strong>Zaken afsluiten verandert de stand.</strong> Omdat alleen openstaande zaken tellen, verschuiven de percentages als je een stapel zaken afsluit: wie veel heeft afgerond, komt lager te staan en krijgt de komende tijd weer wat meer. Dat is zo bedoeld — de verdeling gaat over de werkvoorraad van nu.</p>
             <p>Rechts in de ranglijst zie je per rechter de afwijking van zijn/haar eerlijke aandeel als <strong>percentage</strong> (vet), met de punten klein erachter. Het percentage vergelijk je direct met de <strong>marge</strong> (standaard ±15%, instelbaar bij Instellingen): daarboven kleurt de rij rood, daaronder groen — maar pas als het verschil ook minstens 1,5 punt is, zodat kleine schommelingen (bijvoorbeeld in de eerste weken) grijs blijven. De twee streepjes in het balkje markeren die marge. Bij rechters met nog weinig punten kan een klein verschil een hoog percentage geven; kijk dan ook naar de punten.</p>
             <p>Staat bij een rechter "telt mee vanaf" (de datum bij <em>Telt mee vanaf</em> op de personeelskaart), dan telt die pas mee vanaf die datum. Oudere zaken die hij of zij toch heeft (bijvoorbeeld overgenomen), tellen neutraal: niet mee als achterstand en niet als overbelasting.</p>
