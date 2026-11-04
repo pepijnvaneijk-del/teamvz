@@ -1087,8 +1087,10 @@
                 <option value="nieuwst">Nieuwste eerst</option>
                 <option value="kenmerk">Op kenmerk</option>
               </select>
+              <button class="btn btn-ghost" style="font-size:11px;padding:5px 12px;margin-left:6px;" onclick="wvMkKleurPaneelToggle()">🎨 Kleuren aanpassen</button>
             </div>
           </div>
+          <div id="wv-mk-kleurpaneel" style="display:none;"></div>
           <div class="card-hint">Alle lopende MK-zaken op een rij: wie er voorzitter en lid is, en hoe lang de zaak al loopt (gerekend vanaf de datum van toedeling).</div>
           <div id="wv-mk-overzicht"></div>
         </div>
@@ -1341,8 +1343,11 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.11.1';
+const TOOLKIT_VERSIE = '2026.11.2';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.11.2', datum: 'november 2026', releasedatum: '04-11-2026', items: [
+    'MK-overzicht: met <strong>🎨 Kleuren aanpassen</strong> kies je zelf vanaf hoeveel maanden een zaak als <em>let op</em> en als <em>te oud</em> wordt gekleurd, en in welke kleur',
+  ]},
   { versie: '2026.11.1', datum: 'november 2026', releasedatum: '04-11-2026', items: [
     '<strong>MK-overzicht:</strong> onder Werklastverdeling → Zaken staat een nieuw tabblad met alle lopende meervoudige kamers: wie voorzitter en lid is, wanneer de zaak is toegedeeld en hoe oud hij is. Filter op een rechter om diens MK-zaken te zien; zaken ouder dan een half jaar zijn oranje, ouder dan een jaar rood',
   ]},
@@ -3069,6 +3074,9 @@ let pkPrullenbak         = [];
 let wvGewichten        = { B: 1.0, C: 1.5, D: 2.0 };
 let wvMkVzBonus        = 0.5;
 let wvBelastingMarge   = 0.15;
+// MK-overzicht: vanaf hoeveel maanden een zaak 'let op' / 'te oud' kleurt, en in welke kleur
+const WV_MK_LEEFTIJD_STANDAARD = { letop: 6, letopKleur: '#d97706', oud: 12, oudKleur: '#dc2626' };
+let wvMkLeeftijd       = { ...WV_MK_LEEFTIJD_STANDAARD };
 let wvKleurOnder       = '#16a34a';
 let wvKleurRond        = '#d97706';
 let wvKleurBoven       = '#dc2626';
@@ -3103,6 +3111,7 @@ function wvOpslaan() {
   lsZet('teamvz_mk_vz_bonus',     JSON.stringify(wvMkVzBonus));
   lsZet('teamvz_belasting_marge', JSON.stringify(wvBelastingMarge));
   lsZet('teamvz_belasting_kleur', JSON.stringify({onder:wvKleurOnder,rond:wvKleurRond,boven:wvKleurBoven}));
+  lsZet('teamvz_mk_leeftijd', JSON.stringify(wvMkLeeftijd));
   lsZet('teamvz_prullenbak', JSON.stringify({zaken:wvZakenPrullenbak,pk:pkPrullenbak}));
   lsZet('teamvz_kanton', JSON.stringify(_kantonState()));
   lsZet('teamvz_modules', JSON.stringify({ weekpost: wpModuleActief }));
@@ -5264,6 +5273,70 @@ function wvZaakLeeftijd(datum) {
   return { dagen, maanden, tekst };
 }
 
+// Kleur van de leeftijd in het MK-overzicht volgens de ingestelde termijnen.
+function wvMkLeeftijdKleur(l) {
+  if (!l) return '#a8a29e';
+  if (l.maanden >= wvMkLeeftijd.oud)   return wvMkLeeftijd.oudKleur;
+  if (l.maanden >= wvMkLeeftijd.letop) return wvMkLeeftijd.letopKleur;
+  return '#374151';
+}
+
+function wvMkKleurPaneelToggle() {
+  const el = document.getElementById('wv-mk-kleurpaneel'); if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = '';
+  wvRenderMkKleurPaneel();
+}
+
+function wvRenderMkKleurPaneel() {
+  const el = document.getElementById('wv-mk-kleurpaneel'); if (!el) return;
+  const ml = wvMkLeeftijd;
+  const rij = (label, kTermijn, kKleur) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+      <span style="min-width:70px;font-weight:600;">${label}</span>
+      <span>vanaf</span>
+      <input type="number" min="1" max="120" step="1" value="${ml[kTermijn]}" id="wv-mk-${kTermijn}" onchange="wvMkZetLeeftijd('${kTermijn}', this.value)" style="width:60px;font-size:12px;padding:3px 6px;">
+      <span>maanden</span>
+      <input type="color" value="${ml[kKleur]}" id="wv-mk-${kKleur}" onchange="wvMkZetLeeftijd('${kKleur}', this.value)" style="width:40px;height:26px;padding:0;border:1px solid #d5cfc8;border-radius:4px;cursor:pointer;" title="Kies een kleur">
+    </div>`;
+  el.innerHTML = `<div style="background:#f7f4f0;border-radius:6px;padding:12px 16px;margin-bottom:12px;font-family:Arial,sans-serif;font-size:12px;color:#374151;">
+      <div style="font-weight:700;margin-bottom:8px;">Wanneer kleurt de leeftijd?</div>
+      ${rij('Let op', 'letop', 'letopKleur')}
+      ${rij('Te oud', 'oud', 'oudKleur')}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="wvMkLeeftijdStandaard()">Terug naar standaard (6 en 12 maanden)</button>
+        <span style="font-size:11px;color:#78716c;">Wijzigingen worden meteen opgeslagen.</span>
+      </div>
+    </div>`;
+}
+
+function wvMkZetLeeftijd(veld, val) {
+  const ml = { ...wvMkLeeftijd };
+  if (veld === 'letop' || veld === 'oud') {
+    ml[veld] = Math.min(120, Math.max(1, Math.round(uGetal(val, WV_MK_LEEFTIJD_STANDAARD[veld]))));
+    // 'Te oud' moet ná 'let op' komen; anders schuift de andere termijn mee
+    if (ml.oud <= ml.letop) { if (veld === 'oud') ml.letop = Math.max(1, ml.oud - 1); else ml.oud = ml.letop + 1; }
+  } else if (/^#[0-9a-f]{6}$/i.test(val)) {
+    ml[veld] = val;
+  }
+  wvMkLeeftijd = ml;
+  uLog('mk-leeftijd-ingesteld');
+  wvOpslaan(); wvMkKleurPaneelWaarden(); wvRenderMkOverzicht();
+}
+
+function wvMkLeeftijdStandaard() {
+  wvMkLeeftijd = { ...WV_MK_LEEFTIJD_STANDAARD };
+  wvOpslaan(); wvMkKleurPaneelWaarden(); wvRenderMkOverzicht();
+}
+
+// Zet de velden in het kleurpaneel gelijk aan de instelling, zonder het paneel opnieuw
+// op te bouwen (dat zou een veld weghalen dat nog de focus heeft).
+function wvMkKleurPaneelWaarden() {
+  for (const k of ['letop', 'oud', 'letopKleur', 'oudKleur']) {
+    const inp = document.getElementById('wv-mk-' + k);
+    if (inp) inp.value = wvMkLeeftijd[k];
+  }
+}
+
 function wvRenderMkOverzicht() {
   const el = document.getElementById('wv-mk-overzicht'); if (!el) return;
   const alleMk = wvZaken.filter(z => z.type === 'MK' && !z.afgehandeld);
@@ -5294,12 +5367,13 @@ function wvRenderMkOverzicht() {
   // Samenvatting
   const leeftijden = lijst.map(z => wvZaakLeeftijd(z.datum)).filter(Boolean);
   const gemMnd = leeftijden.length ? leeftijden.reduce((s, l) => s + l.maanden, 0) / leeftijden.length : null;
-  const ouderDanJaar = leeftijden.filter(l => l.maanden >= 12).length;
+  const ml = wvMkLeeftijd;
+  const ouderDanJaar = leeftijden.filter(l => l.maanden >= ml.oud).length;
   const tegel = (lbl, val, sub) => `<div class="totaal-item" style="background:#f7f4f0;border-radius:6px;padding:10px 16px;min-width:130px;"><div class="totaal-item-lbl">${lbl}</div><div class="totaal-item-val">${val}</div>${sub ? `<div class="totaal-item-sub">${sub}</div>` : ''}</div>`;
   let html = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
     ${tegel(wvMkFilterRid ? 'MK-zaken van ' + wvEsc(wvRechterNaam(wvMkFilterRid)) : 'Lopende MK-zaken', lijst.length, wvMkFilterRid ? `van ${alleMk.length} in totaal` : '')}
     ${tegel('Gemiddelde leeftijd', gemMnd === null ? '–' : (Math.round(gemMnd * 10) / 10).toString().replace('.', ',') + ' mnd', '')}
-    ${tegel('Ouder dan 1 jaar', ouderDanJaar, ouderDanJaar === 1 ? 'zaak' : 'zaken')}
+    ${tegel(ml.oud + ' maanden of ouder', ouderDanJaar, ouderDanJaar === 1 ? 'zaak' : 'zaken')}
   </div>`;
 
   if (!lijst.length) { el.innerHTML = html + '<div class="leeg">Deze rechter zit in geen lopende MK-zaak.</div>'; return; }
@@ -5311,9 +5385,9 @@ function wvRenderMkOverzicht() {
   };
   const rijen = lijst.map(z => {
     const l = wvZaakLeeftijd(z.datum);
-    const kleur = !l ? '#a8a29e' : l.maanden >= 12 ? '#b91c1c' : l.maanden >= 6 ? '#b45309' : '#374151';
+    const kleur = wvMkLeeftijdKleur(l);
     const leeftijdCel = l
-      ? `<span style="color:${kleur};font-weight:${l.maanden >= 6 ? '700' : '400'};">${l.tekst}</span>`
+      ? `<span style="color:${kleur};font-weight:${kleur !== '#374151' ? '700' : '400'};">${l.tekst}</span>`
       : '<span style="color:#a8a29e;">onbekend</span>';
     return `<tr><td style="font-weight:600;">${wvEsc(z.kenmerk)}${z.notitie ? `<br><span style="font-size:10px;color:#78716c;font-weight:normal;font-style:italic;">${wvEsc(z.notitie)}</span>` : ''}</td>
       <td>${wvZwaarteBadge(z)}</td>
@@ -5322,7 +5396,7 @@ function wvRenderMkOverzicht() {
       <td style="white-space:nowrap;">${leeftijdCel}</td></tr>`;
   }).join('');
   html += `<table class="zaken-tabel" id="wv-mk-tabel"><thead><tr><th>Zaakkenmerk</th><th>Zwaarte</th><th>Voorzitter</th><th>Lid 1</th><th>Lid 2</th><th>Toegedeeld</th><th>Leeftijd</th></tr></thead><tbody>${rijen}</tbody></table>
-    <div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin-top:8px;">Oranje: ouder dan een half jaar · rood: ouder dan een jaar.</div>`;
+    <div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin-top:8px;"><span style="color:${ml.letopKleur};font-weight:700;">■</span> ${ml.letop} maanden of ouder · <span style="color:${ml.oudKleur};font-weight:700;">■</span> ${ml.oud} maanden of ouder</div>`;
   el.innerHTML = html;
 }
 
@@ -8131,6 +8205,7 @@ function stateSerialize() {
     mkVzBonus:          wvMkVzBonus,
     belastingMarge:     wvBelastingMarge,
     belastingKleur:     {onder:wvKleurOnder,rond:wvKleurRond,boven:wvKleurBoven},
+    mkLeeftijd:         wvMkLeeftijd,
     personeelskaarten:  pkKaarten,
     neventakencat:      pkCategorieen,
     weekpost:           wpGetState(),
@@ -8160,6 +8235,7 @@ function stateApply(data) {
   ovOverlegtypen=[]; ovBespreekpunten=[]; ovVergaderingen=[]; ovTaken=[]; ovWeekpostNotities=[];
   wvGewichten={B:1.0,C:1.5,D:2.0}; wvMkVzBonus=0.5; wvBelastingMarge=0.15;
   wvKleurOnder='#16a34a'; wvKleurRond='#d97706'; wvKleurBoven='#dc2626';
+  wvMkLeeftijd={ ...WV_MK_LEEFTIJD_STANDAARD };
   wvKantonActief=false; wvKantonGewichten={eenvoudig:1.0,normaal:1.5,complex:2.0};
   wvKantonCategorieen=[]; wvPakketTypes=[]; wvPakketten=[];
   wpModuleActief=true;
@@ -8206,6 +8282,7 @@ function stateApply(data) {
   if (data.mkVzBonus != null)       wvMkVzBonus       = data.mkVzBonus;
   if (data.belastingMarge != null)  wvBelastingMarge  = data.belastingMarge;
   if (data.belastingKleur) { const k=data.belastingKleur; wvKleurOnder=k.onder||wvKleurOnder; wvKleurRond=k.rond||wvKleurRond; wvKleurBoven=k.boven||wvKleurBoven; }
+  if (data.mkLeeftijd) wvMkLeeftijd = { ...WV_MK_LEEFTIJD_STANDAARD, ...data.mkLeeftijd };
   if (data.weekpost)   wpLaadState(data.weekpost);
   if (Array.isArray(data.overlegtypen))   ovOverlegtypen   = data.overlegtypen;
   if (Array.isArray(data.bespreekpunten)) ovBespreekpunten = data.bespreekpunten;
@@ -8799,6 +8876,7 @@ const LS_VELDEN = [
   ['teamvz_vrijstellingcats','vrijstellingcats'], ['teamvz_verdeelweken','verdeelweken'],
   ['teamvz_gewichten','gewichten'], ['teamvz_mk_vz_bonus','mkVzBonus'],
   ['teamvz_belasting_marge','belastingMarge'], ['teamvz_belasting_kleur','belastingKleur'],
+  ['teamvz_mk_leeftijd','mkLeeftijd'],
   ['teamvz_personeelskaarten','personeelskaarten'], ['teamvz_neventaken_cat','neventakencat'],
   ['teamvz_weekpost','weekpost'], ['teamvz_weekmails','weekmails'],
   ['teamvz_wistjedatarchief','wistjedatarchief'], ['teamvz_wp_med_sjablonen','medsjablonen'],
@@ -11390,7 +11468,7 @@ document.addEventListener('keydown', function(e) {
           </div>
           <div class="hdl-card">
             <h3>MK-overzicht</h3>
-            <p>Via <strong>Zaken → ⚖️ MK-overzicht</strong> zie je alle lopende meervoudige kamers in één tabel: voorzitter, lid 1, lid 2, de datum van toedeling en hoe lang de zaak al loopt. Kies bovenaan een rechter om alleen diens MK-zaken te zien. Bovenaan staan het aantal, de gemiddelde leeftijd en hoeveel zaken ouder zijn dan een jaar. Oranje = ouder dan een half jaar, rood = ouder dan een jaar. Zaken bewerken of afsluiten doe je in <strong>Actieve zaken</strong>.</p>
+            <p>Via <strong>Zaken → ⚖️ MK-overzicht</strong> zie je alle lopende meervoudige kamers in één tabel: voorzitter, lid 1, lid 2, de datum van toedeling en hoe lang de zaak al loopt. Kies bovenaan een rechter om alleen diens MK-zaken te zien. Bovenaan staan het aantal, de gemiddelde leeftijd en hoeveel zaken ouder zijn dan een jaar. Standaard kleurt de leeftijd oranje vanaf 6 maanden en rood vanaf 12 maanden; met <kbd>🎨 Kleuren aanpassen</kbd> kies je zelf de termijnen en de kleuren. Zaken bewerken of afsluiten doe je in <strong>Actieve zaken</strong>.</p>
 
             <h3>Actieve zaken</h3>
             <p>Via <strong>Zaken → Actieve zaken</strong> bekijk je alle openstaande zaken. Je kunt filteren en sorteren (o.a. op <strong>kenmerk</strong>, natuurlijke volgorde). Met <kbd>✓ Afsluiten</kbd> gaat een zaak naar het archief. Via <kbd>→ MK</kbd> zet je een enkelvoudige zaak om naar een meervoudige kamer. Draai je zelf mee in een MK van een ander team? Kies dan bij voorzitter/lid <em>"Extern (geen teamlid)"</em> — alleen jouw rol telt dan mee. Met <kbd>⬇ Exporteer zakenlijst</kbd> download je de actieve zaken als Excel-bestand.</p>
