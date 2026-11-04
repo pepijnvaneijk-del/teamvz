@@ -1042,6 +1042,7 @@
     <div class="pane" id="wv-pane-zaken">
       <div class="tabs" style="margin:-1px -1px 14px;">
         <button class="wv-subtab active" onclick="wvZetZaakSubTab('actief',this)">📋 Actieve zaken</button>
+        <button class="wv-subtab" onclick="wvZetZaakSubTab('mk',this)">⚖️ MK-overzicht</button>
         <button class="wv-subtab" onclick="wvZetZaakSubTab('archiveren',this)">📦 Afsluiten</button>
         <button class="wv-subtab" onclick="wvZetZaakSubTab('importeren',this)">⬆ Importeren</button>
       </div>
@@ -1070,6 +1071,26 @@
             </div>
           </div>
           <div id="wv-zaken-lijst"></div>
+        </div>
+      </div>
+
+      <div class="wv-zpane" id="wv-zpane-mk" style="display:none;">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+            <div class="card-title" style="margin-bottom:0;">Meervoudige kamers</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <label style="text-transform:none;letter-spacing:0;font-size:11px;color:#78716c;margin:0;">Rechter:</label>
+              <select id="wv-mk-rechter" onchange="wvMkFilterRid=this.value;wvRenderMkOverzicht()" style="font-size:11px;padding:4px 8px;width:auto;"></select>
+              <label style="text-transform:none;letter-spacing:0;font-size:11px;color:#78716c;margin:0 0 0 6px;">Sorteren:</label>
+              <select id="wv-mk-sorteer" onchange="wvMkSorteer=this.value;wvRenderMkOverzicht()" style="font-size:11px;padding:4px 8px;width:auto;">
+                <option value="oudste">Oudste eerst</option>
+                <option value="nieuwst">Nieuwste eerst</option>
+                <option value="kenmerk">Op kenmerk</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-hint">Alle lopende MK-zaken op een rij: wie er voorzitter en lid is, en hoe lang de zaak al loopt (gerekend vanaf de datum van toedeling).</div>
+          <div id="wv-mk-overzicht"></div>
         </div>
       </div>
 
@@ -1320,8 +1341,11 @@
 // ================================================================
 // VERSIE & CHANGELOG
 // ================================================================
-const TOOLKIT_VERSIE = '2026.10.24';
+const TOOLKIT_VERSIE = '2026.11.1';
 const TOOLKIT_CHANGELOG = [
+  { versie: '2026.11.1', datum: 'november 2026', releasedatum: '04-11-2026', items: [
+    '<strong>MK-overzicht:</strong> onder Werklastverdeling → Zaken staat een nieuw tabblad met alle lopende meervoudige kamers: wie voorzitter en lid is, wanneer de zaak is toegedeeld en hoe oud hij is. Filter op een rechter om diens MK-zaken te zien; zaken ouder dan een half jaar zijn oranje, ouder dan een jaar rood',
+  ]},
   { versie: '2026.10.24', datum: 'oktober 2026', releasedatum: '28-10-2026', items: [
     '<strong>Vrijstellingen met einddatum:</strong> vul bij een vrijstelling <em>Loopt tot en met</em> in; daarna telt hij niet meer mee (voor de weken ervóór nog wel). Het startscherm meldt een vrijstelling die binnen twee weken afloopt of al verlopen is',
     '<strong>Gesprek afsluiten</strong> bij Overleggen → Rechters: de besproken punten gaan naar het archief van die rechter, met de datum van het gesprek',
@@ -4324,6 +4348,7 @@ function wvZetFilter(v) {
 }
 
 function wvRenderZakenLijst() {
+  if (wvZaakTabActief === 'mk') wvRenderMkOverzicht();
   const el=document.getElementById('wv-zaken-lijst'); if(!el) return;
   if (!wvZaken.length) { el.innerHTML='<div class="leeg">Nog geen zaken geregistreerd.</div>'; return; }
   const sortSel = document.getElementById('wv-zaak-sorteer');
@@ -5215,6 +5240,92 @@ function wvGesorteerdeZaken() {
 
 let wvZaakTabActief = 'actief';
 
+// ---- MK-overzicht: alle lopende meervoudige kamers met bezetting en leeftijd ----
+let wvMkFilterRid = '';
+let wvMkSorteer = 'oudste';
+
+// Leeftijd van een zaak vanaf de toedelingsdatum, in gewone woorden.
+function wvZaakLeeftijd(datum) {
+  if (!datum) return null;
+  const van = new Date(String(datum).slice(0, 10) + 'T00:00:00');
+  if (isNaN(van)) return null;
+  const nu = new Date(uDatumISO() + 'T00:00:00');
+  const dagen = Math.max(0, Math.round((nu - van) / 86400000));
+  let maanden = (nu.getFullYear() - van.getFullYear()) * 12 + (nu.getMonth() - van.getMonth());
+  if (nu.getDate() < van.getDate()) maanden--;
+  maanden = Math.max(0, maanden);
+  let tekst;
+  if (maanden < 1) tekst = dagen === 1 ? '1 dag' : `${dagen} dagen`;
+  else if (maanden < 12) tekst = maanden === 1 ? '1 maand' : `${maanden} maanden`;
+  else {
+    const j = Math.floor(maanden / 12), m = maanden % 12;
+    tekst = `${j} jaar` + (m ? ` en ${m} ${m === 1 ? 'maand' : 'maanden'}` : '');
+  }
+  return { dagen, maanden, tekst };
+}
+
+function wvRenderMkOverzicht() {
+  const el = document.getElementById('wv-mk-overzicht'); if (!el) return;
+  const alleMk = wvZaken.filter(z => z.type === 'MK' && !z.afgehandeld);
+  // Rechterkeuze: alleen teamleden die in minstens één lopende MK zitten
+  const sel = document.getElementById('wv-mk-rechter');
+  const ridsInMk = new Set();
+  alleMk.forEach(z => [z.vz_id, z.l1_id, z.l2_id].forEach(id => { if (wvIsEchteRechterId(id)) ridsInMk.add(id); }));
+  if (wvMkFilterRid && !ridsInMk.has(wvMkFilterRid)) wvMkFilterRid = '';
+  if (sel) {
+    const opties = [...ridsInMk].map(id => ({ id, naam: wvRechterNaam(id) })).sort((a, b) => a.naam.localeCompare(b.naam, 'nl'));
+    sel.innerHTML = '<option value="">Alle rechters</option>' + opties.map(o => `<option value="${o.id}"${o.id === wvMkFilterRid ? ' selected' : ''}>${wvEsc(o.naam)}</option>`).join('');
+  }
+  const sorteerSel = document.getElementById('wv-mk-sorteer');
+  if (sorteerSel) sorteerSel.value = wvMkSorteer;
+
+  if (!alleMk.length) { el.innerHTML = '<div class="leeg">Er lopen op dit moment geen MK-zaken.</div>'; return; }
+
+  const lijst = wvMkFilterRid ? alleMk.filter(z => [z.vz_id, z.l1_id, z.l2_id].includes(wvMkFilterRid)) : alleMk;
+  const opDatum = (a, b, richting) => {
+    if (!a.datum && !b.datum) return 0;
+    if (!a.datum) return 1;
+    if (!b.datum) return -1;
+    return richting * a.datum.localeCompare(b.datum);
+  };
+  if (wvMkSorteer === 'kenmerk') lijst.sort((a, b) => (a.kenmerk || '').localeCompare(b.kenmerk || '', 'nl', { numeric: true }));
+  else lijst.sort((a, b) => opDatum(a, b, wvMkSorteer === 'nieuwst' ? -1 : 1));
+
+  // Samenvatting
+  const leeftijden = lijst.map(z => wvZaakLeeftijd(z.datum)).filter(Boolean);
+  const gemMnd = leeftijden.length ? leeftijden.reduce((s, l) => s + l.maanden, 0) / leeftijden.length : null;
+  const ouderDanJaar = leeftijden.filter(l => l.maanden >= 12).length;
+  const tegel = (lbl, val, sub) => `<div class="totaal-item" style="background:#f7f4f0;border-radius:6px;padding:10px 16px;min-width:130px;"><div class="totaal-item-lbl">${lbl}</div><div class="totaal-item-val">${val}</div>${sub ? `<div class="totaal-item-sub">${sub}</div>` : ''}</div>`;
+  let html = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+    ${tegel(wvMkFilterRid ? 'MK-zaken van ' + wvEsc(wvRechterNaam(wvMkFilterRid)) : 'Lopende MK-zaken', lijst.length, wvMkFilterRid ? `van ${alleMk.length} in totaal` : '')}
+    ${tegel('Gemiddelde leeftijd', gemMnd === null ? '–' : (Math.round(gemMnd * 10) / 10).toString().replace('.', ',') + ' mnd', '')}
+    ${tegel('Ouder dan 1 jaar', ouderDanJaar, ouderDanJaar === 1 ? 'zaak' : 'zaken')}
+  </div>`;
+
+  if (!lijst.length) { el.innerHTML = html + '<div class="leeg">Deze rechter zit in geen lopende MK-zaak.</div>'; return; }
+
+  const naamCel = id => {
+    if (!id) return '<em style="color:#a8a29e;">nog niet toegewezen</em>';
+    const n = wvEsc(wvRechterNaam(id));
+    return id === wvMkFilterRid ? `<strong>${n}</strong>` : n;
+  };
+  const rijen = lijst.map(z => {
+    const l = wvZaakLeeftijd(z.datum);
+    const kleur = !l ? '#a8a29e' : l.maanden >= 12 ? '#b91c1c' : l.maanden >= 6 ? '#b45309' : '#374151';
+    const leeftijdCel = l
+      ? `<span style="color:${kleur};font-weight:${l.maanden >= 6 ? '700' : '400'};">${l.tekst}</span>`
+      : '<span style="color:#a8a29e;">onbekend</span>';
+    return `<tr><td style="font-weight:600;">${wvEsc(z.kenmerk)}${z.notitie ? `<br><span style="font-size:10px;color:#78716c;font-weight:normal;font-style:italic;">${wvEsc(z.notitie)}</span>` : ''}</td>
+      <td>${wvZwaarteBadge(z)}</td>
+      <td>${naamCel(z.vz_id)}</td><td>${naamCel(z.l1_id)}</td><td>${naamCel(z.l2_id)}</td>
+      <td style="white-space:nowrap;">${z.datum ? wvEsc(String(z.datum).slice(0, 10).split('-').reverse().join('-')) : '–'}</td>
+      <td style="white-space:nowrap;">${leeftijdCel}</td></tr>`;
+  }).join('');
+  html += `<table class="zaken-tabel" id="wv-mk-tabel"><thead><tr><th>Zaakkenmerk</th><th>Zwaarte</th><th>Voorzitter</th><th>Lid 1</th><th>Lid 2</th><th>Toegedeeld</th><th>Leeftijd</th></tr></thead><tbody>${rijen}</tbody></table>
+    <div style="font-family:Arial,sans-serif;font-size:10px;color:#a8a29e;margin-top:8px;">Oranje: ouder dan een half jaar · rood: ouder dan een jaar.</div>`;
+  el.innerHTML = html;
+}
+
 function wvZetZaakSubTab(naam, btn) {
   wvZaakTabActief = naam;
   uLog('wv-zaak-tab-geopend', { tab: naam });
@@ -5224,6 +5335,7 @@ function wvZetZaakSubTab(naam, btn) {
   const pane = document.getElementById('wv-zpane-' + naam);
   if (pane) pane.style.display = '';
   if (naam === 'actief')     wvRenderZakenLijst();
+  if (naam === 'mk')         wvRenderMkOverzicht();
   if (naam === 'archiveren') wvRenderZakenArchief();
   if (naam === 'importeren') wvImportRenderScherm();
 }
@@ -11277,6 +11389,9 @@ document.addEventListener('keydown', function(e) {
             <div class="hdl-tip"><span class="hdl-tip-icon">💡</span><span><strong>In- én uitstroom in één grafiek.</strong> Zodra je zaken afsluit via <strong>Zaken → Afsluiten</strong>, tekent "Verdeling per week" op Inzicht een tweede lijn: de afgesloten zaken per week. Onder de grafiek staat het saldo over de getoonde weken — of de voorraad in die periode is gegroeid of gekrompen. De uitstroomlijn telt ook geïmporteerde zaken (die verdwijnen immers echt uit de voorraad) en begint te lopen vanaf het moment dat je afsluitdatums registreert.</span></div>
           </div>
           <div class="hdl-card">
+            <h3>MK-overzicht</h3>
+            <p>Via <strong>Zaken → ⚖️ MK-overzicht</strong> zie je alle lopende meervoudige kamers in één tabel: voorzitter, lid 1, lid 2, de datum van toedeling en hoe lang de zaak al loopt. Kies bovenaan een rechter om alleen diens MK-zaken te zien. Bovenaan staan het aantal, de gemiddelde leeftijd en hoeveel zaken ouder zijn dan een jaar. Oranje = ouder dan een half jaar, rood = ouder dan een jaar. Zaken bewerken of afsluiten doe je in <strong>Actieve zaken</strong>.</p>
+
             <h3>Actieve zaken</h3>
             <p>Via <strong>Zaken → Actieve zaken</strong> bekijk je alle openstaande zaken. Je kunt filteren en sorteren (o.a. op <strong>kenmerk</strong>, natuurlijke volgorde). Met <kbd>✓ Afsluiten</kbd> gaat een zaak naar het archief. Via <kbd>→ MK</kbd> zet je een enkelvoudige zaak om naar een meervoudige kamer. Draai je zelf mee in een MK van een ander team? Kies dan bij voorzitter/lid <em>"Extern (geen teamlid)"</em> — alleen jouw rol telt dan mee. Met <kbd>⬇ Exporteer zakenlijst</kbd> download je de actieve zaken als Excel-bestand.</p>
           </div>
